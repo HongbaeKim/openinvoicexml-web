@@ -65,6 +65,10 @@ web_modules/
 
 # Output of 'npm pack'
 *.tgz
+# ...except the vendored engine tarball: not on npm yet, and frontend-build on the VPS
+# (git pull + npm ci) needs it committed.
+!frontend/vendor/*.tgz
+!validator/vendor/*.tgz
 
 # Yarn Integrity file
 .yarn-integrity
@@ -145,3 +149,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Preview build output and the IP allow-list
+frontend/dist-staging/
+nginx/private-allow.conf
+
+# Internal OpenInvoiceXML build output
+internal
