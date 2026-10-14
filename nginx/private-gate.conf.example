@@ -1,0 +1,5 @@
+# Public deployment: no access gate. nginx/nginx.conf includes this file inside the preview pages
+# and the check API; with only comments here they are open to everyone.
+# To restrict them, copy this file to nginx/private-gate.conf (git-ignored) and use:
+#   include /etc/nginx/private-allow.conf;
+#   deny all;

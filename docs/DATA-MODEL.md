@@ -4,6 +4,11 @@ This covers the beta/developer signup database for the hosted website — not th
 [`openinvoicexml`](https://github.com/HongbaeKim/openinvoicexml) engine, which is stateless
 (see that repo's `docs/ARCHITECTURE.md`).
 
+`POST /api/validate` (the optional invoice check) and `POST /api/validate/upload` (checking an
+existing file) do not persist invoice contents, uploaded files or validation reports. Technical request and
+operational logs are retained separately, as described in [`SECURITY.md`](SECURITY.md) and the privacy notice. The
+two signup tables below are the only application database tables that persist user-submitted data.
+
 Two independent tables, one per signup form, plain Postgres, no separate migration tool
 (`db/*.sql` auto-runs on first boot — see `docker-compose.yml`).
 

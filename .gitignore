@@ -153,6 +153,4 @@ vite.config.ts.timestamp-*
 # Preview build output and the IP allow-list
 frontend/dist-staging/
 nginx/private-allow.conf
-
-# Internal OpenInvoiceXML build output
-internal
+nginx/private-gate.conf

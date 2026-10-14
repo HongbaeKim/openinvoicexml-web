@@ -137,6 +137,9 @@ services:
       # IPs allowed to open the private preview pages / call the check API (git-ignored; must exist
       # before the container is created, or Docker creates a directory in its place)
       - ./nginx/private-allow.conf:/etc/nginx/private-allow.conf:ro
+      # Access gate for the preview pages / check API, included by nginx.conf (git-ignored; created
+      # from the .example by `make local-config`; same missing-file rule as above)
+      - ./nginx/private-gate.conf:/etc/nginx/private-gate.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
       - /var/www/certbot:/var/www/certbot:ro
       - /etc/letsencrypt/live/api.openinvoicexml.de:/etc/letsencrypt/live/api.openinvoicexml.de:ro

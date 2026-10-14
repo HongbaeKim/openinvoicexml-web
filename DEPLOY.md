@@ -1,112 +1,51 @@
-# Deploying (VPS)
+# Deploying
 
-The backend API and the frontend static site both deploy to the same VPS, fronted by the same
-nginx. Prerequisites: a VPS with Docker + Docker Compose installed, and DNS for
-`api.openinvoicexml.de`, `openinvoicexml.de` (apex), and `www.openinvoicexml.de` already pointed
-at the VPS's IP (A records — propagation must be complete before requesting certs, or the ACME
-challenge will fail). `www` only ever 301-redirects to the apex (see nginx.conf) — it doesn't
-serve content of its own, but it still needs DNS + a cert so the redirect can happen over HTTPS.
+General steps to run the production stack on a Linux host. Site-specific operations (exact certificate
+issuance and renewal setup, host paths, recovery, staging, rollout order) are not part of this repository.
 
-## 1. First-time setup
+## Prerequisites
+
+- A host with Docker and Docker Compose.
+- DNS for your domain(s) pointing at the host, and ports 80 and 443 reachable.
+- A TLS certificate for each name nginx serves. `nginx/nginx.conf` expects the certificate files at the paths
+  mounted in `docker-compose.yml` (a Let's Encrypt layout; Certbot is supported through the `certbot` service and
+  `certbot/`). nginx refuses to start while those files are missing, so issue certificates before starting it.
+  Adjust the domain names in `nginx/nginx.conf` and `docker-compose.yml` for your own deployment.
+
+## Configure
 
 ```sh
 git clone <repo> && cd <repo>
 cp .env.example .env
-# edit .env: set ALLOWED_ORIGIN=https://openinvoicexml.de, and change BOTH DATABASE_URL and
-# POSTGRES_PASSWORD to the same real password (not the "app:app" dev default) — they're
-# independent variables that must match, see docker-compose.yml's comments
 ```
 
-**Important:** `POSTGRES_PASSWORD` only takes effect the first time Postgres initializes its
-data directory. Set the real password in `.env` _before_ the first `docker compose up` —
-changing it afterwards on an already-running deployment does nothing silently (the volume
-already has the old password baked in) until you either wipe the volume (destroys data) or
-change it manually inside Postgres (`ALTER USER app WITH PASSWORD '...'`) and update
-`DATABASE_URL` to match.
+Edit `.env`: set `ALLOWED_ORIGIN` to your site's origin, and set `DATABASE_URL` and `POSTGRES_PASSWORD` to the same
+real password (not the `app:app` development default). `POSTGRES_PASSWORD` only takes effect when Postgres first
+initializes its data directory, so set it before the first start.
 
-## 2. Bootstrap the first TLS certs
-
-nginx's config hardcodes paths to cert files that don't exist yet — with them missing, nginx
-refuses to start at all (it loads its config atomically), including the port-80 blocks that
-would otherwise serve the ACME challenge. So the very first certs have to be obtained **before
-nginx starts**, using Certbot's `--standalone` mode (it binds port 80 itself, briefly — fine,
-since nothing else is listening on it yet). Two separate domains, two separate certs — kept
-independent so renewal or expiry of one never affects the other:
+Local nginx files are created from their examples when missing (never overwritten):
 
 ```sh
-docker compose --profile production run --rm -p 80:80 certbot certonly \
-  --standalone -d api.openinvoicexml.de \
-  --email contact@openinvoicexml.de --agree-tos -n
-
-docker compose --profile production run --rm -p 80:80 certbot certonly \
-  --standalone -d openinvoicexml.de -d www.openinvoicexml.de \
-  --email contact@openinvoicexml.de --agree-tos -n
+make local-config
 ```
 
-`www.openinvoicexml.de` is issued as a second name (SAN) on the same apex cert lineage, not a
-separate cert — nginx's `www` server block only redirects, so it reuses the apex's cert files
-directly (see nginx.conf).
+- `nginx/private-allow.conf`: IP addresses allowed through the access gate.
+- `nginx/private-gate.conf`: the gate itself. The example is open (no restriction); to restrict the preview pages
+  and the check API, put `include /etc/nginx/private-allow.conf;` and `deny all;` in it.
 
-> Already have a running deployment whose apex cert predates `www` support? Expand the existing
-> lineage in place instead of re-bootstrapping, using `--webroot` since nginx already owns port 80:
->
-> ```sh
-> docker compose --profile production run --rm certbot certonly \
->   --webroot -w /var/www/certbot --cert-name openinvoicexml.de \
->   -d openinvoicexml.de -d www.openinvoicexml.de --expand \
->   --email contact@openinvoicexml.de --agree-tos -n
-> ```
->
-> Then restart nginx to pick up the new cert: `docker compose --profile production restart nginx`.
-
-## 3. Build the frontend
+## Build and start
 
 ```sh
-docker compose --profile production run --rm frontend-build
+make deploy-frontend     # builds ./frontend/dist, which nginx serves read-only
+make deploy-up           # postgres, validator, backend, nginx
 ```
 
-Produces `frontend/dist`, which nginx mounts read-only as its docroot (see step 4). Unlike
-the certs above, this isn't a hard boot dependency — nginx will start fine without it and just
-serve 404s from an empty docroot — but do it first anyway so the site is actually live once
-nginx comes up.
-
-## 4. Start the stack
+## Redeploy
 
 ```sh
-docker compose --profile production up -d
+git pull
+make product-all         # rebuilds the frontend and the images, then restarts the stack
 ```
 
-nginx now starts successfully (the certs from step 2 exist) and owns port 80/443 going forward,
-serving both `api.openinvoicexml.de` (reverse-proxied to the backend) and `openinvoicexml.de`
-(static files from step 3). Verify: `curl https://api.openinvoicexml.de/health` →
-`{"status":"ok"}`, and `https://openinvoicexml.de` loads the site.
-
-## 5. Set up renewal
-
-nginx owns port 80 continuously from now on, so all renewals after the first use `--webroot`
-instead of `--standalone`. Docker Compose has no built-in scheduler, so this is a host cron job.
-`certbot/renew.sh` wraps the actual renewal command (a single `certbot renew` renews every cert
-it manages, so one script call covers both domains); `certbot/crontab` holds the schedule for
-it. Install it with:
-
-```sh
-make deploy-cron-install
-```
-
-This merges `certbot/crontab`'s entry into your real crontab rather than replacing it — safe
-even if this VPS already runs cron jobs for other projects (`crontab < file` would wipe those
-out; the install script specifically avoids that, and is safe to re-run). If the repo doesn't
-live at `~/openinvoicexml-web`, edit the path in `certbot/crontab` first.
-
-The script's `--deploy-hook` only fires (restarting nginx to pick up the new cert) when a cert
-actually renews — most days this is a no-op. Run it by hand any time with `make deploy-renew`,
-or test the whole flow without touching the real cert via
-`docker compose --profile production run --rm certbot renew --dry-run`.
-
-## Redeploying later
-
-Backend changes: `git pull`, `docker compose --profile production up -d --build backend`.
-
-Frontend changes: `git pull`, `docker compose --profile production run --rm frontend-build`.
-No nginx restart needed — nginx serves the files straight off disk on every request, so a
-rebuilt `dist/` takes effect immediately.
+See [`docs/SECURITY.md`](docs/SECURITY.md) for the nginx hardening and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+for how the services fit together.

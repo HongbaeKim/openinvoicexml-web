@@ -1,4 +1,4 @@
-.PHONY: up build down all \
+.PHONY: up build down all local-config \
 	deploy-certs-bootstrap deploy-frontend deploy-nginx deploy-up deploy-down deploy-logs deploy-renew deploy-cron-install product-all \
 	db db-sql
 
@@ -17,7 +17,7 @@ down:
 
 # One-time, first deploy only: bootstrap TLS certs for both domains. Must run before
 # deploy-up, since nginx refuses to boot at all with missing cert files (config loads
-# atomically) — see DEPLOY.md step 2.
+# atomically) — see DEPLOY.md.
 deploy-certs-bootstrap:
 	docker compose --profile production run --rm -p 80:80 certbot certonly \
 		--standalone -d api.openinvoicexml.de \
@@ -32,12 +32,19 @@ deploy-certs-bootstrap:
 deploy-frontend:
 	docker compose --profile production run --rm frontend-build
 
-deploy-nginx:
+# Creates the git-ignored local nginx files from their .example versions, only when missing, so an
+# existing real configuration is never overwritten. nginx.conf mounts both; Docker would create a
+# directory in place of a missing file.
+local-config:
+	test -f nginx/private-allow.conf || cp nginx/private-allow.conf.example nginx/private-allow.conf
+	test -f nginx/private-gate.conf || cp nginx/private-gate.conf.example nginx/private-gate.conf
+
+deploy-nginx: local-config
 	docker compose --profile production up -d nginx
 
-# Start (or pick up changes to) the full production stack: postgres, backend, nginx.
-deploy-up:
-	docker compose --profile production up -d postgres backend nginx
+# Start (or pick up changes to) the full production stack: postgres, validator, backend, nginx.
+deploy-up: local-config
+	docker compose --profile production up -d postgres validator backend nginx
 
 deploy-down:
 	docker compose --profile production down
@@ -62,8 +69,8 @@ deploy-cron-install:
 # Rebuilds the frontend static site and the backend image, then brings the stack up.
 # Does NOT bootstrap certs — that's a one-time-only first-deploy step (deploy-certs-bootstrap),
 # and re-running --standalone here would conflict with nginx already holding port 80.
-product-all: deploy-frontend
-	docker compose --profile production up -d --build postgres backend nginx
+product-all: local-config deploy-frontend
+	docker compose --profile production up -d --build postgres validator backend nginx
 
 
 # DB

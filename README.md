@@ -30,7 +30,7 @@ docker compose up -d
 
 Brings up Postgres and the backend, plus a Vite dev server for the frontend at
 `http://localhost:8080`. See [`DEPLOY.md`](DEPLOY.md) for production deployment on a VPS
-(TLS bootstrap, cert renewal, redeploying).
+(prerequisites, `.env`, build and start, TLS requirement, redeploying).
 
 ## Docs
 
@@ -39,7 +39,7 @@ Brings up Postgres and the backend, plus a Vite dev server for the frontend at
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                              | Backend/frontend folder conventions, numbered slices |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)                                  | `beta_signups`/`developer_signups` schema            |
 | [`docs/SECURITY.md`](docs/SECURITY.md)                                      | nginx hardening: TLS, headers, rate limiting, CSP    |
-| [`DEPLOY.md`](DEPLOY.md)                                                    | VPS deployment, TLS cert bootstrap and renewal       |
+| [`DEPLOY.md`](DEPLOY.md)                                                    | General deployment steps and TLS requirement         |
 
 ## License
 

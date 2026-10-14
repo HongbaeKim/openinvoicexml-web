@@ -1,0 +1,6 @@
+# Copy to nginx/private-allow.conf (git-ignored) and list YOUR public IPs, one line per address. Used by the
+# private preview pages on openinvoicexml.de.
+# Get them with:  curl -4 https://ifconfig.me   and   curl -6 https://ifconfig.me
+# Add the IPv6 line only if the second command prints an address; your browser may use either one.
+allow x.x.x.x;
+# allow x:x::x;
