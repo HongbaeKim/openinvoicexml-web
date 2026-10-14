@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { useTranslation } from "../000-core/i18n";
 import { footerDict } from "./footer.i18n";
+import { Link } from "../000-core/router";
 
 export function Footer(): JSX.Element {
   const { t, lang } = useTranslation(footerDict);
@@ -9,13 +10,13 @@ export function Footer(): JSX.Element {
     <footer className="w-full border-t border-border px-5 pt-8 pb-10 text-[0.85rem]">
       <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
         <div>
-          <a
-            href="index.html"
+          <Link
+            href="/"
             className="inline-flex items-center gap-2 text-sm font-semibold text-text no-underline hover:underline"
           >
             <img src="/logo/OIX.png" alt="" className="h-6 w-6 rounded-full" />
             OpenInvoiceXML
-          </a>
+          </Link>
           <ul className="mt-3 list-none space-y-1.5 p-0">
             <li>
               <a
@@ -48,14 +49,14 @@ export function Footer(): JSX.Element {
               </a>
             </li>
             <li>
-              <a className="text-text-muted no-underline hover:underline" href="privacy.html">
+              <Link className="text-text-muted no-underline hover:underline" href="/privacy">
                 {t.privacy}
-              </a>
+              </Link>
             </li>
             <li>
-              <a className="text-text-muted no-underline hover:underline" href="impressum.html">
+              <Link className="text-text-muted no-underline hover:underline" href="/impressum">
                 {t.impressum}
-              </a>
+              </Link>
             </li>
           </ul>
         </div>

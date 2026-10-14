@@ -3,6 +3,7 @@ import { Header } from "../100-layout/Header";
 import { Footer } from "../100-layout/Footer";
 import { useTranslation, usePageMeta } from "../000-core/i18n";
 import { privacyDict } from "./Privacy.i18n";
+import { Link } from "../000-core/router";
 
 export function Privacy(): JSX.Element {
   const { t } = useTranslation(privacyDict);
@@ -21,9 +22,9 @@ export function Privacy(): JSX.Element {
           <h2 className="mb-4 text-xl text-text">{t.whoResponsibleHeading}</h2>
           <p>
             {t.whoResponsible.before}
-            <a className="text-accent no-underline hover:underline" href="impressum.html">
+            <Link className="text-accent no-underline hover:underline" href="/impressum">
               {t.whoResponsible.linkText}
-            </a>{" "}
+            </Link>{" "}
             {t.whoResponsible.after}{" "}
             <a
               className="text-accent no-underline hover:underline"
@@ -39,7 +40,26 @@ export function Privacy(): JSX.Element {
           <h2 className="mb-4 text-xl text-text">{t.whatWeCollectHeading}</h2>
           <p className="mb-3">{t.betaSignup}</p>
           <p className="mb-3">{t.developerFeedback}</p>
-          <p>{t.noAccounts}</p>
+          <p className="mb-3">{t.noAccounts}</p>
+          <p>{t.voluntary}</p>
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xl text-text">{t.invoiceCheckHeading}</h2>
+          {t.invoiceCheck.map((paragraph) => (
+            <p key={paragraph} className="mb-3">
+              {paragraph}
+            </p>
+          ))}
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xl text-text">{t.uploadCheckHeading}</h2>
+          {t.uploadCheck.map((paragraph) => (
+            <p key={paragraph} className="mb-3">
+              {paragraph}
+            </p>
+          ))}
         </section>
 
         <section>
@@ -72,6 +92,11 @@ export function Privacy(): JSX.Element {
         </section>
 
         <section>
+          <h2 className="mb-4 text-xl text-text">{t.deviceHeading}</h2>
+          <p>{t.device}</p>
+        </section>
+
+        <section>
           <h2 className="mb-4 text-xl text-text">{t.yourRightsHeading}</h2>
           <p>{t.rightsIntro}</p>
           <ul className="mb-4 list-disc space-y-1 pl-5 text-text-muted">
@@ -79,6 +104,7 @@ export function Privacy(): JSX.Element {
               <li key={right}>{right}</li>
             ))}
           </ul>
+          <p className="mb-3">{t.automated}</p>
           <p>
             {t.exerciseRights.before}
             <a

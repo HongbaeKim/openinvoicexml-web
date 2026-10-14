@@ -2,6 +2,7 @@ import { useState, type FormEvent, type JSX } from "react";
 import { submitDeveloperSignup } from "../000-core/api";
 import { useTranslation } from "../000-core/i18n";
 import { developerFormDict } from "./DeveloperForm.i18n";
+import { Link } from "../000-core/router";
 
 type MessageState = { text: string; kind: "success" | "error" } | null;
 
@@ -179,9 +180,9 @@ export function DeveloperForm(): JSX.Element {
             *
           </span>{" "}
           {t.consent.before}
-          <a className="text-accent no-underline hover:underline" href="privacy.html">
+          <Link className="text-accent no-underline hover:underline" href="/privacy">
             {t.consent.linkText}
-          </a>
+          </Link>
           {t.consent.after}
         </label>
       </div>

@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import { useLanguage } from "../000-core/i18n";
+import { Link } from "../000-core/router";
 
 export function Header(): JSX.Element {
   const { lang, setLang } = useLanguage();
@@ -7,13 +8,13 @@ export function Header(): JSX.Element {
   return (
     <header className="border-b border-border">
       <div className="flex items-center justify-between px-5 py-4">
-        <a
-          href="index.html"
+        <Link
+          href="/"
           className="inline-flex items-center gap-2 text-sm font-semibold text-text no-underline hover:underline"
         >
           <img src="/logo/OIX.png" alt="" className="h-6 w-6 rounded-full" />
           OpenInvoiceXML
-        </a>
+        </Link>
         <div className="flex items-center gap-1 text-xs" role="group" aria-label="Language">
           <button
             type="button"

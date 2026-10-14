@@ -4,6 +4,8 @@
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
+# The engine is a file:vendor/*.tgz dependency, so it must be in the image before npm ci.
+COPY vendor ./vendor
 RUN npm ci
 COPY . .
 EXPOSE 8080

@@ -9,7 +9,6 @@ export const impressumDict: Record<
     responsibleHeading: string;
     contactHeading: string;
     emailLabel: string;
-    phoneLabel: string;
     fundingHeading: string;
     funding: { before: string; linkText: string; after: string };
   }
@@ -21,13 +20,12 @@ export const impressumDict: Record<
     responsibleHeading: "Verantwortlich für den Inhalt",
     contactHeading: "Kontakt",
     emailLabel: "E-Mail:",
-    phoneLabel: "Telefon:",
     fundingHeading: "Projektförderung",
     funding: {
-      before: "openinvoicexml wird gefördert von ",
+      before: "openinvoicexml wird gefördert durch den ",
       linkText: "Prototype Fund",
       after:
-        ", einem Programm des Bundesministeriums für Forschung, Technologie und Raumfahrt (BMFTR), verwaltet von der Open Knowledge Foundation Deutschland.",
+        ", ein vom Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR) gefördertes Programm unter dem Dach der Open Knowledge Foundation Deutschland.",
     },
   },
   en: {
@@ -38,13 +36,12 @@ export const impressumDict: Record<
     responsibleHeading: "Responsible for content",
     contactHeading: "Contact",
     emailLabel: "Email:",
-    phoneLabel: "Phone:",
     fundingHeading: "Project funding",
     funding: {
-      before: "openinvoicexml is funded by ",
+      before: "openinvoicexml is funded through the ",
       linkText: "Prototype Fund",
       after:
-        ", a program of the Federal Ministry of Research, Technology and Space (BMFTR), managed by the Open Knowledge Foundation Germany.",
+        ", a program funded by the Federal Ministry of Research, Technology and Space (BMFTR) and run under the umbrella of Open Knowledge Foundation Germany.",
     },
   },
 };

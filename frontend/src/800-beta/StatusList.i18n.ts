@@ -60,7 +60,7 @@ export const phasesDict: Record<Lang, Phase[]> = {
         "Factur-X/ZUGFeRD-Profile",
         "40+ Testfälle",
       ],
-      status: "progress",
+      status: "done",
     },
     {
       title: "Phase 5.1 — Tests, Sicherheit & Dokumentation",
@@ -73,12 +73,12 @@ export const phasesDict: Record<Lang, Phase[]> = {
         "Performance-Tests",
         "Dokumentation",
       ],
-      status: "upcoming",
+      status: "progress",
     },
     {
       title: "Phase 5.2 — Refactoring & Release",
-      shortLabel: "Nov",
-      period: "Nov 2026",
+      shortLabel: "Nov–Dec",
+      period: "Nov – Dec 2026",
       description: "Abschließende Konformitätsprüfung und das v1.0.0-Prototype-Release.",
       subItems: [
         "Refactoring & Aufräumen",
@@ -135,7 +135,7 @@ export const phasesDict: Record<Lang, Phase[]> = {
         "Factur-X/ZUGFeRD profiles",
         "40+ fixtures",
       ],
-      status: "progress",
+      status: "done",
     },
     {
       title: "Phase 5.1 — Testing, Security & Documentation",
@@ -143,12 +143,12 @@ export const phasesDict: Record<Lang, Phase[]> = {
       period: "Oct 2026",
       description: "Full automated test suite, security review, and documentation.",
       subItems: ["Full test suite", "Security review", "Performance testing", "Documentation"],
-      status: "upcoming",
+      status: "progress",
     },
     {
       title: "Phase 5.2 — Refactoring & Release",
-      shortLabel: "Nov",
-      period: "Nov 2026",
+      shortLabel: "Nov–Dec",
+      period: "Nov – Dec 2026",
       description: "Final compliance verification and the v1.0.0-prototype release.",
       subItems: [
         "Refactoring & cleanup",

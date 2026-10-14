@@ -5,6 +5,7 @@ import { StatusList } from "../800-beta/StatusList";
 import { Faq } from "./Faq";
 import { useTranslation, usePageMeta } from "../000-core/i18n";
 import { appDict } from "./App.i18n";
+import { Link } from "../000-core/router";
 
 export function App(): JSX.Element {
   const { t } = useTranslation(appDict);
@@ -49,22 +50,22 @@ export function App(): JSX.Element {
             <div className="flex flex-col rounded-[10px] border border-border bg-surface p-5">
               <h3 className="mb-1 text-lg text-text">{t.createInvoicesTitle}</h3>
               <p className="mb-3 text-sm text-text-muted">{t.createInvoicesDescription}</p>
-              <a
+              <Link
                 className="mt-auto inline-block self-start rounded-md bg-accent px-[1.1rem] py-[0.55rem] text-sm font-semibold text-accent-text no-underline hover:opacity-90"
-                href="beta.html"
+                href="/beta"
               >
                 {t.joinBeta}
-              </a>
+              </Link>
             </div>
             <div className="flex flex-col rounded-[10px] border border-border bg-surface p-5">
               <h3 className="mb-1 text-lg text-text">{t.buildTitle}</h3>
               <p className="mb-3 text-sm text-text-muted">{t.buildDescription}</p>
-              <a
+              <Link
                 className="mt-auto inline-block self-start rounded-md bg-accent px-[1.1rem] py-[0.55rem] text-sm font-semibold text-accent-text no-underline hover:opacity-90"
-                href="developer.html"
+                href="/developer"
               >
                 {t.shareNeeds}
-              </a>
+              </Link>
             </div>
           </div>
         </section>

@@ -12,6 +12,7 @@
   --color-progress: #4f8cff;
   --color-upcoming: #565d68;
   --color-danger: #ff6b6b;
+  --color-warning: #f5a524;
 }
 
 @layer base {

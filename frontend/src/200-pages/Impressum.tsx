@@ -27,7 +27,7 @@ export function Impressum(): JSX.Element {
             <br />
             Guerickestraße 10
             <br />
-            10587, Berlin
+            10587 Berlin
             <br />
             Germany
           </p>
@@ -43,8 +43,6 @@ export function Impressum(): JSX.Element {
             >
               contact@openinvoicexml.de
             </a>
-            <br />
-            {t.phoneLabel} +49 157 34727901
           </p>
         </section>
 
