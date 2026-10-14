@@ -1,0 +1,26 @@
+{
+  "name": "openinvoicexml-validator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal KoSIT / Mustang / veraPDF validation service for openinvoicexml-web (no public port, no network access)",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "vitest run --passWithNoTests"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "openinvoicexml": "file:vendor/openinvoicexml-0.4.3.tgz"
+  },
+  "devDependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
+    "@types/node": "^26.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
