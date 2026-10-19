@@ -22,10 +22,10 @@ export const impressumDict: Record<
     emailLabel: "E-Mail:",
     fundingHeading: "Projektförderung",
     funding: {
-      before: "openinvoicexml wird gefördert durch den ",
+      before: "openinvoicexml wurde von Juni bis November 2026 durch den ",
       linkText: "Prototype Fund",
       after:
-        ", ein vom Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR) gefördertes Programm unter dem Dach der Open Knowledge Foundation Deutschland.",
+        " gefördert, ein vom Bundesministerium für Forschung, Technologie und Raumfahrt (BMFTR) gefördertes Programm unter dem Dach der Open Knowledge Foundation Deutschland.",
     },
   },
   en: {
@@ -38,7 +38,7 @@ export const impressumDict: Record<
     emailLabel: "Email:",
     fundingHeading: "Project funding",
     funding: {
-      before: "openinvoicexml is funded through the ",
+      before: "openinvoicexml was funded from June to November 2026 through the ",
       linkText: "Prototype Fund",
       after:
         ", a program funded by the Federal Ministry of Research, Technology and Space (BMFTR) and run under the umbrella of Open Knowledge Foundation Germany.",

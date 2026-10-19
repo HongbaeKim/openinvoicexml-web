@@ -31,7 +31,7 @@ export const appDict: Record<
     todayFormat: "PDF",
     future: "2028",
     futureFormat: "Strukturierte E-Rechnung",
-    fundedByGovernment: "Gefördert von der Bundesregierung",
+    fundedByGovernment: "OpenInvoiceXML wurde von Juni bis November 2026 durch den Prototype Fund (BMFTR) gefördert.",
     freeOpenSource: "Kostenlos & Open Source",
     intro: "Bereite dich auf Deutschlands B2B E-Rechnungspflicht 2028 vor.",
     createInvoicesTitle: "Freiberufler, Kleinunternehmen & NGOs",
@@ -42,7 +42,7 @@ export const appDict: Record<
     shareNeeds: "Teile deine Integrationswünsche →",
     statusHeading: "Aktueller Stand",
     statusNote:
-      "Die 5 Phasen oben decken die Open-Source-Engine selbst ab. Der gehostete Webdienst (das Beta-Programm oben) ist als zweite Stufe nach der Veröffentlichung geplant.",
+      "Die 5 Phasen oben decken die Open-Source-Engine selbst ab. Der gehostete Webdienst (das Beta-Programm oben) folgt nach der Veröffentlichung der Engine.",
     faqHeading: "Häufige Fragen",
   },
   en: {
@@ -53,7 +53,7 @@ export const appDict: Record<
     todayFormat: "PDF",
     future: "2028",
     futureFormat: "Structured e-invoice",
-    fundedByGovernment: "Funded by the German Government",
+    fundedByGovernment: "OpenInvoiceXML received funding from the Prototype Fund (BMFTR) from June to November 2026.",
     freeOpenSource: "Free & Open Source",
     intro: "Prepare for Germany's 2028 B2B e-invoicing law.",
     createInvoicesTitle: "Freelancers, Small Businesses & NGOs",
@@ -64,7 +64,7 @@ export const appDict: Record<
     shareNeeds: "Share your needs →",
     statusHeading: "Where things stand",
     statusNote:
-      "The 5 phases above cover the open-source engine itself. The hosted web service (the beta program above) is planned as a Second Stage after release.",
+      "The 5 phases above cover the open-source engine itself. The hosted web service (the beta program above) follows after the engine's release.",
     faqHeading: "FAQ",
   },
 };
