@@ -8,8 +8,8 @@ issuance and renewal setup, host paths, recovery, staging, rollout order) are no
 - A host with Docker and Docker Compose.
 - DNS for your domain(s) pointing at the host, and ports 80 and 443 reachable.
 - A TLS certificate for each name nginx serves. `nginx/nginx.conf` expects the certificate files at the paths
-  mounted in `docker-compose.yml` (a Let's Encrypt layout; Certbot is supported through the `certbot` service and
-  `certbot/`). nginx refuses to start while those files are missing, so issue certificates before starting it.
+  mounted in `docker-compose.yml` (a Let's Encrypt layout; the `certbot` service in `docker-compose.yml` can issue them). Renewing them on a schedule
+  is up to the operator (for example a cron job running `certbot renew`, then reloading nginx). nginx refuses to start while those files are missing, so issue certificates before starting it.
   Adjust the domain names in `nginx/nginx.conf` and `docker-compose.yml` for your own deployment.
 
 ## Configure

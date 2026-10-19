@@ -1,5 +1,5 @@
 .PHONY: up build down all local-config \
-	deploy-certs-bootstrap deploy-frontend deploy-nginx deploy-up deploy-down deploy-logs deploy-renew deploy-cron-install product-all \
+	deploy-certs-bootstrap deploy-frontend deploy-nginx deploy-up deploy-down deploy-logs product-all \
 	db db-sql
 
 all: down build up
@@ -51,19 +51,6 @@ deploy-down:
 
 deploy-logs:
 	docker compose --profile production logs -f
-
-# Manual cert renewal — the cron job (see deploy-cron-install below) calls certbot/renew.sh
-# directly; this target is the same script, for running it by hand. Renews every cert
-# Certbot manages, so it covers both domains in one call.
-deploy-renew:
-	./certbot/renew.sh
-
-# One-time: installs certbot/crontab's renewal schedule into this user's real crontab.
-# Merges rather than replaces — this VPS runs cron jobs for other projects too, and a
-# plain `crontab < file` would wipe those out. Safe to re-run; it replaces only its own
-# previous entry (matched by the certbot/renew.sh path) instead of adding a duplicate.
-deploy-cron-install:
-	./certbot/install-cron.sh
 
 # Routine "redeploy everything" after a `git pull` — production counterpart to `all` above.
 # Rebuilds the frontend static site and the backend image, then brings the stack up.

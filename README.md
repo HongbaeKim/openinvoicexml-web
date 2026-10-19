@@ -16,7 +16,6 @@ validation, XML/PDF generation, KoSIT/veraPDF/Mustang compliance checks) lives i
 /backend      — Fastify + Postgres API for beta/developer signups
 /db           — SQL migrations (auto-run on first Postgres boot)
 /nginx        — nginx config (TLS, headers, rate limiting) fronting both origins
-/certbot      — Let's Encrypt cert bootstrap/renewal scripts
 /docs         — architecture and data-model docs for this repo
 docker-compose.yml, DEPLOY.md, Makefile — local dev and VPS deployment
 ```
