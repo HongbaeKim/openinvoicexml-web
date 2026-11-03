@@ -154,3 +154,4 @@ vite.config.ts.timestamp-*
 frontend/dist-staging/
 nginx/private-allow.conf
 nginx/private-gate.conf
+/frontend/dist-new/
