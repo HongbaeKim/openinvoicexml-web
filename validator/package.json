@@ -15,7 +15,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "openinvoicexml": "file:vendor/openinvoicexml-0.4.3.tgz"
+    "openinvoicexml": "file:vendor/openinvoicexml-0.5.0.tgz"
   },
   "devDependencies": {
     "@cantoo/pdf-lib": "^2.11.1",
