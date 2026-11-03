@@ -61,7 +61,7 @@ function rootElement(
   // Skip those items, together with surrounding whitespace, so that the next tag
   // should be the document's root element.
   const prolog =
-    /^(?:\s+|<\?[\s\S]*?\?>|<!--[\s\S]*?-->)*?/.exec(text);
+    /^(?:\s+|<\?[\s\S]*?\?>|<!--[\s\S]*?-->)*/.exec(text);
 
   const rest = text.slice(prolog?.[0].length ?? 0);
 
