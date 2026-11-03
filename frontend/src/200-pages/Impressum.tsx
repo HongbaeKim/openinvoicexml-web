@@ -39,9 +39,9 @@ export function Impressum(): JSX.Element {
             {t.emailLabel}{" "}
             <a
               className="text-accent no-underline hover:underline"
-              href="mailto:contact@openinvoicexml.de"
+              href="mailto:contact@openinvoicexml.com"
             >
-              contact@openinvoicexml.de
+              contact@openinvoicexml.com
             </a>
           </p>
         </section>

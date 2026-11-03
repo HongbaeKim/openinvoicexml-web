@@ -21,10 +21,10 @@ down:
 deploy-certs-bootstrap:
 	docker compose --profile production run --rm -p 80:80 certbot certonly \
 		--standalone -d api.openinvoicexml.com \
-		--email contact@openinvoicexml.de --agree-tos -n
+		--email contact@openinvoicexml.com --agree-tos -n
 	docker compose --profile production run --rm -p 80:80 certbot certonly \
 		--standalone -d openinvoicexml.com -d www.openinvoicexml.com \
-		--email contact@openinvoicexml.de --agree-tos -n
+		--email contact@openinvoicexml.com --agree-tos -n
 
 # Build the frontend static site into ./frontend/dist, which nginx serves read-only.
 # Run again after every frontend change — no nginx restart needed, it serves files

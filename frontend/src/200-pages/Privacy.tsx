@@ -28,7 +28,7 @@ export function Privacy(): JSX.Element {
             {t.whoResponsible.after}{" "}
             <a
               className="text-accent no-underline hover:underline"
-              href="mailto:contact@openinvoicexml.de"
+              href="mailto:contact@openinvoicexml.com"
             >
               {t.whoResponsible.email}
             </a>
@@ -68,7 +68,7 @@ export function Privacy(): JSX.Element {
             {t.why.before}
             <a
               className="text-accent no-underline hover:underline"
-              href="mailto:contact@openinvoicexml.de"
+              href="mailto:contact@openinvoicexml.com"
             >
               {t.why.email}
             </a>
@@ -109,7 +109,7 @@ export function Privacy(): JSX.Element {
             {t.exerciseRights.before}
             <a
               className="text-accent no-underline hover:underline"
-              href="mailto:contact@openinvoicexml.de"
+              href="mailto:contact@openinvoicexml.com"
             >
               {t.exerciseRights.email}
             </a>

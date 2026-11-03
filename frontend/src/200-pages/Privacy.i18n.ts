@@ -48,7 +48,7 @@ export const privacyDict: Record<
         "Die vollständige rechtliche Identität und Anschrift des Verantwortlichen findest du im ",
       linkText: "Impressum",
       after: ". Kontakt für alles, was diesen Hinweis betrifft:",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
     },
     whatWeCollectHeading: "Was wir erheben",
     betaSignup:
@@ -78,7 +78,7 @@ export const privacyDict: Record<
     why: {
       before:
         "Um dich zu benachrichtigen, sobald der gehostete openinvoicexml-Dienst verfügbar ist, und um zu verstehen, wer interessiert ist und was benötigt wird — das hilft, Prioritäten für die Entwicklung zu setzen. Diese Verarbeitung beruht auf deiner Einwilligung (Art. 6 Abs. 1 lit. a DSGVO) — der Checkbox, die du beim Absenden des Formulars ankreuzt. Du kannst diese Einwilligung jederzeit widerrufen, genauso einfach wie du sie erteilt hast, per E-Mail an ",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
       after:
         "; der Widerruf hat keine Auswirkung auf die Verarbeitung, die vor diesem Zeitpunkt bereits erfolgt ist.",
     },
@@ -109,7 +109,7 @@ export const privacyDict: Record<
       "Es findet keine automatisierte Entscheidungsfindung oder Profilbildung statt.",
     exerciseRights: {
       before: "Um eines dieser Rechte auszuüben, sende eine E-Mail an ",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
       after:
         ". Du hast außerdem das Recht, Beschwerde bei einer Datenschutzaufsichtsbehörde einzureichen — insbesondere bei der Berliner Beauftragten für Datenschutz und Informationsfreiheit oder bei der Aufsichtsbehörde deines eigenen EU-Mitgliedstaats.",
     },
@@ -127,7 +127,7 @@ export const privacyDict: Record<
       linkText: "Impressum",
       after:
         " for the full legal identity and address of the data controller. Contact for anything related to this notice:",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
     },
     whatWeCollectHeading: "What we collect",
     betaSignup:
@@ -157,7 +157,7 @@ export const privacyDict: Record<
     why: {
       before:
         "To notify you when the hosted openinvoicexml service is available, and to understand who is interested and what they need — this helps prioritize what gets built. This processing is based on your consent (Art. 6(1)(a) GDPR) — the checkbox you tick when submitting the form. You can withdraw that consent at any time, as easily as you gave it, by emailing ",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
       after: "; withdrawal doesn't affect processing already carried out before that point.",
     },
     whereStoredHeading: "Where it's stored",
@@ -186,7 +186,7 @@ export const privacyDict: Record<
     automated: "There is no automated decision-making or profiling.",
     exerciseRights: {
       before: "To exercise any of these, email ",
-      email: "contact@openinvoicexml.de",
+      email: "contact@openinvoicexml.com",
       after:
         ". You also have the right to lodge a complaint with a data protection supervisory authority — in particular the Berliner Beauftragte für Datenschutz und Informationsfreiheit (Berlin Commissioner for Data Protection and Freedom of Information), or the supervisory authority of your own EU member state.",
     },
