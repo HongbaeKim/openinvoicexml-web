@@ -123,7 +123,7 @@ services:
   # Only started on the VPS via `docker compose --profile production up`. Left out of the
   # default `docker compose up` because it needs real Let's Encrypt certs on the host that
   # don't exist on a local dev machine. Serves the frontend's static build directly (see
-  # frontend-build above) in addition to reverse-proxying api.openinvoicexml.de to backend.
+  # frontend-build above) in addition to reverse-proxying api.openinvoicexml.com to backend.
   nginx:
     profiles: ["production"]
     image: nginx:1.27-alpine
@@ -142,6 +142,11 @@ services:
       - ./nginx/private-gate.conf:/etc/nginx/private-gate.conf:ro
       - ./frontend/dist:/usr/share/nginx/html:ro
       - /var/www/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt/live/api.openinvoicexml.com:/etc/letsencrypt/live/api.openinvoicexml.com:ro
+      - /etc/letsencrypt/archive/api.openinvoicexml.com:/etc/letsencrypt/archive/api.openinvoicexml.com:ro
+      - /etc/letsencrypt/live/openinvoicexml.com:/etc/letsencrypt/live/openinvoicexml.com:ro
+      - /etc/letsencrypt/archive/openinvoicexml.com:/etc/letsencrypt/archive/openinvoicexml.com:ro
+      # Legacy .de names only redirect to .com now, but still need their certificates
       - /etc/letsencrypt/live/api.openinvoicexml.de:/etc/letsencrypt/live/api.openinvoicexml.de:ro
       - /etc/letsencrypt/archive/api.openinvoicexml.de:/etc/letsencrypt/archive/api.openinvoicexml.de:ro
       - /etc/letsencrypt/live/openinvoicexml.de:/etc/letsencrypt/live/openinvoicexml.de:ro

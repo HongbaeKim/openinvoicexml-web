@@ -1,8 +1,11 @@
 # nginx hardening (pre-launch)
 
 `nginx/nginx.conf` is the single public-facing entry point — headers, TLS policy, and rate
-limiting all live here rather than in the app. It fronts two origins: `api.openinvoicexml.de`
-(reverse proxy to the backend) and `openinvoicexml.de` (static frontend build).
+limiting all live here rather than in the app. It fronts two origins: `api.openinvoicexml.com`
+(reverse proxy to the backend) and `openinvoicexml.com` (static frontend build). The former `.de` names
+(`openinvoicexml.de`, `www.`, `api.`) only redirect to them: 301 for the site, 308 for the API, so a POST keeps its
+method. HSTS stays on the `.de` redirects. A browser CORS preflight does not follow redirects, so browser callers of
+the old API host fail by design.
 
 ```text
                  Internet
@@ -12,7 +15,7 @@ limiting all live here rather than in the app. It fronts two origins: `api.openi
                   nginx
                  /     \
                 /       \
-api.openinvoicexml.de   openinvoicexml.de
+api.openinvoicexml.com   openinvoicexml.com
          |                      |
          | Docker network       v
          v                Static frontend files
@@ -149,13 +152,13 @@ so the client's preference can influence which common cipher is selected.
 
   ```text
   User types:
-  http://openinvoicexml.de
+  http://openinvoicexml.com
 
   Browser remembers HSTS
           ↓
   automatically changes it to
           ↓
-  https://openinvoicexml.de
+  https://openinvoicexml.com
   ```
 
 - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
@@ -179,14 +182,14 @@ so the client's preference can influence which common cipher is selected.
   ```
 
 - **CSP on the frontend origin**: `default-src 'self'; script-src 'self'; style-src 'self';
-  img-src 'self' data:; connect-src 'self' https://api.openinvoicexml.de; frame-ancestors 'none';
+  img-src 'self' data:; connect-src 'self' https://api.openinvoicexml.com; frame-ancestors 'none';
   base-uri 'self'; form-action 'self';` — no `'unsafe-inline'` (Vite build emits only external
   `<script type="module">`/`<link>` tags).
 - `server_tokens off;` on both server blocks.
 
   ```text
   default-src 'self'
-  → by default, only load resources from openinvoicexml.de
+  → by default, only load resources from openinvoicexml.com
 
   script-src 'self'
   → JavaScript only from your own domain
@@ -197,7 +200,7 @@ so the client's preference can influence which common cipher is selected.
   img-src 'self' data:
   → images from your own domain, plus embedded data URLs
 
-  connect-src 'self' https://api.openinvoicexml.de
+  connect-src 'self' https://api.openinvoicexml.com
   → frontend may make network requests only to itself and your API
 
   frame-ancestors 'none'
@@ -260,9 +263,9 @@ so the client's preference can influence which common cipher is selected.
 ## Verification checklist (before opening the site)
 
 1. `docker compose --profile production run --rm nginx nginx -t` (syntax check).
-2. `curl -I https://api.openinvoicexml.de/health` — confirm headers present, no version string.
+2. `curl -I https://api.openinvoicexml.com/health` — confirm headers present, no version string.
 3. Loop `curl -X POST .../api/beta` faster than 5/min — confirm `429` after burst, recovery after.
-4. `curl -I https://openinvoicexml.de` + browser devtools — confirm CSP present, no console errors.
+4. `curl -I https://openinvoicexml.com` + browser devtools — confirm CSP present, no console errors.
 
 Verified on 2026-08-12:
 

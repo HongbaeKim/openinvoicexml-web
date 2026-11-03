@@ -8,7 +8,7 @@ How this repo's frontend and backend are organized, and how they relate to the
 `openinvoicexml` is a separate repo: a stateless TypeScript library with no dependency on
 anything here. This repo (`openinvoicexml-web`) is the consumer — the public website, the
 beta/developer signup backend, the browser invoicing UI that calls into that engine, the optional
-server-side invoice-validation relay, and the deploy tooling for `openinvoicexml.de`.
+server-side invoice-validation relay, and the deploy tooling for `openinvoicexml.com`.
 
 ## Backend & Frontend structure
 

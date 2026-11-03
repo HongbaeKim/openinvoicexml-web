@@ -5,7 +5,7 @@ Open-source web interface for generating compliant German e-invoices using
 Factur-X / ZUGFeRD invoice engine.
 
 This repo is the website, the beta/developer signup backend, and the deploy tooling for
-`openinvoicexml.de` — everything end users and the public site touch. The engine itself (schema
+`openinvoicexml.com` — everything end users and the public site touch. The engine itself (schema
 validation, XML/PDF generation, KoSIT/veraPDF/Mustang compliance checks) lives in the separate
 `openinvoicexml` repo and has no dependency on anything here; this repo consumes it.
 

@@ -4,12 +4,12 @@
 // This is deliberately not an allowlist of specific dev hostnames, since those vary by network.
 //
 // A build can override this with VITE_API_BASE ("" = same origin). The staging build sets it, because
-// it is served from openinvoicexml.de:8443 and must not call the live API.
+// it is served from openinvoicexml.com:8443 and must not call the live API.
 const API_BASE =
   import.meta.env.VITE_API_BASE !== undefined
     ? String(import.meta.env.VITE_API_BASE)
-    : window.location.hostname === "openinvoicexml.de"
-      ? "https://api.openinvoicexml.de"
+    : window.location.hostname === "openinvoicexml.com"
+      ? "https://api.openinvoicexml.com"
       : `http://${window.location.hostname}:3000`;
 
 export interface ApiResponse {
