@@ -1,0 +1,80 @@
+# Minimal CI: install, typecheck / build and audit each service. Read-only.
+#
+# It does NOT deploy, restart or SSH anything, uses no secrets and has no write permissions.
+#
+# It also does NOT run the unit tests: they live in a private repository and are never committed here, so
+# `npm test` in this repository would run zero tests and still report success. That is deliberately not used.
+# Each job prints a visible notice instead of pretending tests ran. See internal/.step2/14.md.
+#
+# The validator's integration tests need Java plus KoSIT, Mustang and veraPDF (see validator/Dockerfile); they
+# are not installed in CI.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - run: echo "::notice title=Tests not run::backend unit tests are private and not part of this repository; only npm ci, build and audit ran."
+
+  validator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: validator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: validator/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - run: echo "::notice title=Tests not run::validator unit and integration tests are private and need Java, KoSIT, Mustang and veraPDF; only npm ci, typecheck, build and audit ran."
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - run: echo "::notice title=Tests not run::frontend unit tests are private and not part of this repository; only npm ci, typecheck, build and audit ran."
