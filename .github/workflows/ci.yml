@@ -37,9 +37,15 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --no-fund
+      # src/ and scripts/ (the build below compiles src/ only)
+      - run: npm run typecheck
       - run: npm run build
+      # backend/openapi.yaml is written by hand. This fails when it is not valid OpenAPI or when it and the
+      # routes the backend registers disagree (either direction). Public code only: no database, no
+      # validator service, no secrets, no network.
+      - run: npm run check:openapi
       - run: npm audit --omit=dev --audit-level=high
-      - run: echo "::notice title=Tests not run::backend unit tests are private and not part of this repository; only npm ci, build and audit ran."
+      - run: echo "::notice title=Tests not run::backend unit tests are private and not part of this repository; only npm ci, typecheck, build, the OpenAPI check and audit ran."
 
   validator:
     runs-on: ubuntu-latest

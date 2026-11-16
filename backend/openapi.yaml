@@ -1,0 +1,393 @@
+# Hand-written description of the invoice validation API (see docs/ARCHITECTURE.md, "API description").
+# Served read-only at /api/docs. Only the validation routes are documented; every other /api route is
+# listed as deliberately undocumented in scripts/check-openapi.ts, which also checks that this file and
+# the registered routes agree.
+openapi: 3.0.3
+
+info:
+  title: openinvoicexml validation API
+  version: 0.1.0
+  description: |
+    The invoice validation endpoints of the openinvoicexml website: check an XRechnung or Factur-X /
+    ZUGFeRD invoice with the KoSIT validator, Mustang and veraPDF.
+
+    **These endpoints support the openinvoicexml website. They are not a stable public API.**
+
+    Paths, request and response shapes, limits and availability can change or disappear without
+    notice. There are no API keys, no versioning and no service level. Rate limits are sized for a
+    person using the website (a few requests per minute per IP address), and browser access is
+    limited to the website's own origin (CORS).
+
+    A hosted API for integrations is planned, not available. To build on openinvoicexml today, use
+    the open-source library, which runs locally and needs no server:
+    <https://github.com/HongbaeKim/openinvoicexml>.
+
+    This page is documentation only. Requests cannot be sent from it.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://api.openinvoicexml.com
+
+tags:
+  - name: validation
+    description: Check an invoice with the external validators (KoSIT, Mustang, veraPDF).
+
+paths:
+  /api/validate:
+    post:
+      tags: [validation]
+      operationId: validateGeneratedXml
+      summary: Check an XRechnung UBL invoice created on the website
+      description: |
+        Takes the exact XML bytes the website's invoice form produced and checks them with KoSIT and
+        Mustang. It is deliberately narrow: only a UBL `Invoice` (root element `Invoice` in the
+        namespace `urn:oasis:names:specification:ubl:schema:xsd:Invoice-2`) is accepted. A credit
+        note, CII or any other XML is refused with 400 before any validator runs. To check any other
+        invoice file, use `POST /api/validate/upload`.
+
+        Body: the raw XML, at most 1 MiB, UTF-8, without a DOCTYPE. The bytes are checked exactly as
+        sent, never normalized or re-encoded: the `sha256` in the result is the hash of exactly the
+        bytes received, so a caller can confirm that the checked document is the one it holds.
+
+        Rate limit: 6 requests per minute per IP address.
+
+        Privacy: the invoice is not stored, and its contents are not logged.
+      requestBody:
+        required: true
+        content:
+          application/xml:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: |
+            The validators were asked. This alone does not mean the invoice is valid: read `kosit`
+            and `mustang`. A validator that could not run is reported as
+            `ran: false, reason: "unavailable"`, which is neither a pass nor a fail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/XmlValidationResult"
+        "400":
+          description: The XML was refused before any validator ran. `error` gives the reason.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                empty:
+                  summary: The body is empty.
+                  value: { error: empty }
+                notUtf8:
+                  summary: The body is not valid UTF-8.
+                  value: { error: not-utf8 }
+                doctype:
+                  summary: The XML contains a DOCTYPE declaration.
+                  value: { error: doctype }
+                notWellFormed:
+                  summary: The XML is not well-formed.
+                  value: { error: not-well-formed }
+                notUblInvoice:
+                  summary: The root element is not a UBL Invoice.
+                  value: { error: not-ubl-invoice }
+        "413":
+          description: |
+            The body is over 1 MiB. The response body is not guaranteed to be JSON.
+        "415":
+          description: |
+            The `Content-Type` is not `application/xml` (a `charset` parameter is allowed).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                wrongType:
+                  value: { error: expected application/xml }
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ValidationUnavailable"
+
+  /api/validate/upload:
+    post:
+      tags: [validation]
+      operationId: validateUploadedFile
+      summary: Check an existing invoice file (XML or PDF)
+      description: |
+        Takes one invoice file as raw bytes, possibly made by other software. The format is detected
+        from the content, not from a file name or a MIME type, and no file name is sent: always use
+        `Content-Type: application/octet-stream`.
+
+        - UBL or CII XML: KoSIT and Mustang.
+        - PDF: veraPDF on the PDF; the embedded invoice XML is located and checked too.
+        - Anything else: nothing is checked and `status` is `UNSUPPORTED`.
+
+        Size limits: 5 MiB for an XML file, 10 MiB for a PDF.
+
+        Rate limit: 3 requests per minute per IP address.
+
+        Privacy: the file is not stored, and its contents are not logged. The result never contains
+        the embedded invoice itself, only metadata about it.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: |
+            The file was examined. `status` is the overall outcome; `PASS` requires that there are
+            no file findings and that every applicable validator ran and accepted the file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileValidationResult"
+        "400":
+          description: The body is empty.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                empty:
+                  value: { error: empty }
+        "413":
+          description: |
+            The file is over the limit for its kind (5 MiB XML, 10 MiB PDF), usually answered with the
+            JSON below. A body over 10 MiB may get an answer that is not JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                tooLarge:
+                  value: { error: too large }
+        "415":
+          description: The `Content-Type` is not `application/octet-stream`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                wrongType:
+                  value: { error: expected application/octet-stream }
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ValidationUnavailable"
+
+components:
+  responses:
+    RateLimited:
+      description: |
+        Too many requests from this IP address. The response body is not guaranteed to be JSON. Wait
+        a minute before trying again.
+    ValidationUnavailable:
+      description: |
+        No validation result right now. Two cases, told apart by `error`:
+
+        - `busy`: all validation slots are in use. `Retry-After` says when to try again.
+        - `validation unavailable`: the check could not be completed (for example, it took too
+          long). Try again later. No `Retry-After`.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying. Sent with `busy` only.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            busy:
+              value: { error: busy }
+            unavailable:
+              value: { error: validation unavailable }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Short machine-readable reason. The values each route uses are in its examples.
+      additionalProperties: true
+
+    ValidatorResult:
+      description: |
+        One validator's outcome. Three cases:
+
+        - `applicable: false`: the validator does not apply to this file (for example veraPDF for
+          plain XML). `reason` says why. It never affects an overall result.
+        - `applicable: true, ran: false`: it should have run but could not. `reason` is always
+          `unavailable`. Neither a pass nor a fail.
+        - `applicable: true, ran: true`: it ran. `valid` is its verdict and `issues` its findings.
+      type: object
+      required: [applicable]
+      properties:
+        applicable:
+          type: boolean
+        ran:
+          type: boolean
+          description: Present when `applicable` is `true`.
+        valid:
+          type: boolean
+          description: Present when `applicable` is `true`. Always `false` when `ran` is `false`.
+        reason:
+          type: string
+          description: Why the validator does not apply, or `unavailable` when it could not run.
+        issues:
+          type: array
+          description: Present when `ran` is `true`.
+          items:
+            $ref: "#/components/schemas/ComplianceIssue"
+      additionalProperties: true
+
+    ComplianceIssue:
+      type: object
+      required: [code, severity, message, path, source]
+      properties:
+        code:
+          type: string
+          description: Rule identifier as reported by the validator.
+        severity:
+          type: string
+          enum: [error, warning]
+        message:
+          type: string
+        path:
+          type: string
+          description: Location of the finding, as far as the validator reports one.
+        source:
+          type: string
+          enum: [business-rules, kosit, vera-pdf, mustang]
+        suggestedFix:
+          type: string
+      additionalProperties: true
+
+    ValidatorVersions:
+      description: Versions of the validators that produced this result.
+      type: object
+      required: [kosit, xrechnungConfig, mustang, veraPdf]
+      properties:
+        kosit:
+          type: string
+        xrechnungConfig:
+          type: string
+          description: Version of the XRechnung configuration used by KoSIT.
+        mustang:
+          type: string
+        veraPdf:
+          type: string
+      additionalProperties: true
+
+    XmlValidationResult:
+      type: object
+      required: [sha256, kosit, mustang, versions]
+      properties:
+        sha256:
+          type: string
+          description: SHA-256 (hex) of the exact request bytes that were validated.
+        kosit:
+          $ref: "#/components/schemas/ValidatorResult"
+        mustang:
+          $ref: "#/components/schemas/ValidatorResult"
+        kositScenario:
+          type: string
+          description: The KoSIT scenario the XML matched, when there is one.
+        versions:
+          $ref: "#/components/schemas/ValidatorVersions"
+      additionalProperties: true
+
+    FileValidationResult:
+      type: object
+      required: [sha256, sizeBytes, status, detectedFormat, fileFindings, kosit, mustang, veraPdf, versions]
+      properties:
+        sha256:
+          type: string
+          description: SHA-256 (hex) of the exact uploaded bytes that were validated.
+        sizeBytes:
+          type: integer
+        status:
+          type: string
+          enum: [PASS, FAIL, UNAVAILABLE, UNSUPPORTED]
+          description: |
+            `PASS`: no file findings, and every applicable validator ran and accepted the file.
+            `FAIL`: a file finding, or an applicable validator ran and rejected the file.
+            `UNAVAILABLE`: nothing failed, but an applicable validator could not run; never a pass.
+            `UNSUPPORTED`: neither XML nor PDF; nothing was validated.
+        detectedFormat:
+          type: string
+          enum: [UBL_XML, CII_XML, XML_OTHER, XML_MALFORMED, PDF, UNKNOWN]
+        pdfKind:
+          type: string
+          enum: [FACTURX_CII, UBL_HYBRID]
+          description: For a PDF with exactly one embedded invoice XML.
+        attachments:
+          type: array
+          description: Every attachment found in a PDF, invoice or not (metadata only).
+          items:
+            $ref: "#/components/schemas/PdfAttachment"
+        embedded:
+          allOf:
+            - $ref: "#/components/schemas/PdfAttachment"
+          description: The one embedded invoice XML that was validated. Metadata only, never its bytes.
+        mustangTarget:
+          type: string
+          enum: [XML, PDF, EXTRACTED_XML]
+          description: What Mustang was run on.
+        kositScenario:
+          type: string
+        veraPdfProfile:
+          type: string
+          description: The PDF/A profile veraPDF applied.
+        fileFindings:
+          type: array
+          description: Problems with the file itself. Any entry makes `status` a `FAIL`.
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+                enum:
+                  - XML_MALFORMED
+                  - XML_NOT_AN_INVOICE
+                  - PDF_UNREADABLE
+                  - PDF_NO_EMBEDDED_INVOICE_XML
+                  - PDF_MULTIPLE_EMBEDDED_INVOICE_XML
+              message:
+                type: string
+            additionalProperties: true
+        kosit:
+          $ref: "#/components/schemas/ValidatorResult"
+        mustang:
+          $ref: "#/components/schemas/ValidatorResult"
+        veraPdf:
+          $ref: "#/components/schemas/ValidatorResult"
+        versions:
+          $ref: "#/components/schemas/ValidatorVersions"
+      additionalProperties: true
+
+    PdfAttachment:
+      type: object
+      required: [name, detectedFormat]
+      properties:
+        name:
+          type: string
+          description: The name as stored in the PDF.
+        mediaType:
+          type: string
+        relationship:
+          type: string
+          description: The attachment's `AFRelationship` (for example `Data`, `Alternative`, `Source`).
+        detectedFormat:
+          type: string
+          enum: [UBL_XML, CII_XML, XML_OTHER, XML_MALFORMED, PDF, UNKNOWN]
+      additionalProperties: true

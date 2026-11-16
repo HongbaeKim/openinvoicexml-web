@@ -1,0 +1,11 @@
+{
+  // Typecheck only (`npm run typecheck`, a CI step): the sources plus scripts/, which the build
+  // (tsconfig.json, rootDir src) does not compile. Emits nothing.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src/**/*", "scripts/**/*"],
+  "exclude": ["src/**/*.test.ts"]
+}

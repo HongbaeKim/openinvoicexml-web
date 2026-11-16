@@ -12,5 +12,7 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
+# Served at /api/docs (src/100-middleware/docs.ts reads it from next to dist/).
+COPY openapi.yaml ./
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
