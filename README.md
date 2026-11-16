@@ -38,6 +38,7 @@ Brings up Postgres and the backend, plus a Vite dev server for the frontend at
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)                              | Backend/frontend folder conventions, numbered slices |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md)                                  | `beta_signups`/`developer_signups` schema            |
 | [`docs/SECURITY.md`](docs/SECURITY.md)                                      | nginx hardening: TLS, headers, rate limiting, CSP    |
+| [`backend/openapi.yaml`](backend/openapi.yaml)                              | Validation API as OpenAPI; read-only at `/api/docs`  |
 | [`DEPLOY.md`](DEPLOY.md)                                                    | General deployment steps and TLS requirement         |
 
 ## License

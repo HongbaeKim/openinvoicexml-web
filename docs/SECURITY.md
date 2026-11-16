@@ -35,7 +35,8 @@ it directly could then spoof that header.
 Current exposed surface: `GET /health`, `POST /api/beta`, `POST /api/developer` (both signup
 forms, honeypot field, no auth), `POST /api/validate` (the optional KoSIT + Mustang check for an
 invoice the browser generated) and `POST /api/validate/upload` (check an existing XML/PDF file);
-see "Invoice validation" below.
+see "Invoice validation" below. `GET /api/docs/` is a read-only documentation page for the two
+validation routes; see "API documentation page" below.
 
 ## Invoice validation (`POST /api/validate`)
 
@@ -95,6 +96,43 @@ above:
 Validation is resource-intensive because KoSIT, Mustang and veraPDF start Java processes, so concurrency and
 memory are bounded by configuration (one JVM per validation, `-Xmx512m`). KoSIT's daemon mode could cut the JVM start-up time; it would need engine
 support (`runKosit()` only runs the CLI) and isn't used.
+
+## API documentation page (`GET /api/docs/`)
+
+A Swagger UI page that describes the two validation routes (`POST /api/validate`,
+`POST /api/validate/upload`), served by the backend from the hand-written `backend/openapi.yaml` (`backend/src/100-middleware/docs.ts`; the spec itself at `/api/docs/json` and
+`/api/docs/yaml`). It is **public on purpose**: it holds nothing that is not already in this repository, and
+the spec states at the top that these endpoints support the website and are not a stable public API.
+
+Adding it changed nothing about the other routes. `/api/validate` and `/api/validate/upload` keep their
+access gate (`private-gate.conf`), their nginx zones (`api_validate` 6/min, `api_upload` 3/min), their size
+limits and the backend's own per-IP limits; the signup routes keep `api_signup`. What applies to the page
+itself:
+
+- **Read-only.** The page is built with no submit methods, so Swagger UI shows no "Try it out" / "Execute" on
+  any operation: nothing can be sent to the validators or the database from it. The backend registers only
+  `GET` (and `HEAD`) routes under `/api/docs`, and nginx passes nothing but `GET`/`HEAD` on (`limit_except GET`).
+- **No generated schemas.** The spec is a static file. No schema was attached to any route for the sake of the
+  docs, because a Fastify response schema is also the serializer and would silently drop fields from the
+  validator result that `/api/validate` relays.
+- **Its own CSP, set by the backend for these routes only:** `default-src 'none'`; scripts, stylesheets and
+  fetches from `'self'` only; no inline script or style, no other origin; `frame-ancestors 'none'`;
+  `form-action 'none'`. nginx sends no CSP for `api.openinvoicexml.com` (every other response there is JSON),
+  and the site's CSP on `openinvoicexml.com` is untouched.
+- **The other security headers still apply.** The docs locations contain no `add_header`. One there would
+  drop every header inherited from the server block (HSTS, `nosniff`, `X-Frame-Options`, ...).
+- **nginx** (`location = /api/docs` redirects to `/api/docs/`; `location /api/docs/` proxies): own zone
+  `api_docs`, 2 requests/s per IP with burst 40. One page view is about a dozen small `GET`s, which the
+  5/min signup zone on `location /api/` would answer with 429 and count against that visitor's signup budget.
+  This is why the nginx change has to be live **before** a backend that serves the page.
+- **No files from disk.** Only Swagger UI's own bundled assets and the spec are served; the plugin's option to
+  serve a directory is not used. `/api/docs/package.json`, for example, is a 404.
+- **Validation API only.** The signup routes and the health checks are not documented. They stay reachable
+  exactly as before; they are just not described there. The spec describes behaviour (limits, errors,
+  results), not implementation details.
+- **Drift.** `npm run check:openapi` (a CI step) fails when a documented route does not exist, or when a
+  registered `/api` route is neither documented nor on the script's list of deliberately undocumented
+  routes, so a new route cannot appear without a decision either way.
 
 ## TLS
 

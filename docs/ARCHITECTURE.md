@@ -72,6 +72,20 @@ release: `frontend/vendor/` (imported only via `openinvoicexml/browser`, never
 slices need (`EMAIL_RE` in `000-core/validation.ts`, `isUniqueViolation` in
 `000-core/db-errors.ts`) are shared from `000-core` instead of copied.
 
+### API description
+
+The invoice validation API (`POST /api/validate`, `POST /api/validate/upload`) is described by hand in
+[`backend/openapi.yaml`](../backend/openapi.yaml) (OpenAPI 3.0) and served as a read-only Swagger UI page at `/api/docs` (`backend/src/100-middleware/docs.ts`; the spec itself at
+`/api/docs/json` and `/api/docs/yaml`). Requests cannot be sent from the page. These endpoints exist for the website
+and are not a stable public API; the spec says so at the top.
+
+The spec is not generated from the route schemas, on purpose: a Fastify response schema is also the serializer, and
+would drop any field of the relayed validator result that the schema did not list. When a route is added, removed
+or renamed, update `openapi.yaml` in the same change. `npm run check:openapi` (`backend/scripts/check-openapi.ts`,
+also a CI step) validates the file and compares it with the routes the backend actually registers: every
+documented route must exist, and every registered `/api` route must be either documented or on the script's
+`UNDOCUMENTED` list (today: the two signup forms and the health checks). It needs no database or validator.
+
 ### Routing
 
 The frontend is a single-page app: one `frontend/index.html` (static head for the landing page) and
