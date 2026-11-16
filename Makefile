@@ -42,6 +42,9 @@ local-config:
 deploy-nginx: local-config
 	docker compose --profile production up -d nginx
 
+nginx-reload:
+	docker compose --profile production exec nginx nginx -s reload
+
 # Start (or pick up changes to) the full production stack: postgres, validator, backend, nginx.
 deploy-up: local-config
 	docker compose --profile production up -d postgres validator backend nginx
