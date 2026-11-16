@@ -12,6 +12,9 @@ const API_BASE =
       ? "https://api.openinvoicexml.com"
       : `http://${window.location.hostname}:3000`;
 
+// Read-only description of the endpoints below (Swagger UI, served by the backend).
+export const API_DOCS_URL = `${API_BASE}/api/docs/`;
+
 export interface ApiResponse {
   status?: string;
   error?: string;

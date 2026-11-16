@@ -3,6 +3,7 @@ import { Header } from "../100-layout/Header";
 import { Footer } from "../100-layout/Footer";
 import { DeveloperForm } from "./DeveloperForm";
 import { useTranslation, usePageMeta } from "../000-core/i18n";
+import { API_DOCS_URL } from "../000-core/api";
 import { developerPageDict } from "./DeveloperPage.i18n";
 
 export function DeveloperPage(): JSX.Element {
@@ -20,6 +21,21 @@ export function DeveloperPage(): JSX.Element {
 
         <section>
           <DeveloperForm />
+        </section>
+
+        <section>
+          <p className="text-[0.95rem] text-text-muted">
+            {t.apiDocs.before}
+            <a
+              className="text-accent no-underline hover:underline"
+              href={API_DOCS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t.apiDocs.linkText}
+            </a>
+            {t.apiDocs.after}
+          </p>
         </section>
       </main>
 

@@ -7,6 +7,7 @@ export const developerPageDict: Record<
     metaDescription: string;
     heading: string;
     intro: string;
+    apiDocs: { before: string; linkText: string; after: string };
   }
 > = {
   de: {
@@ -16,6 +17,12 @@ export const developerPageDict: Record<
     heading: "Gestalte OpenInvoiceXML mit",
     intro:
       "Sag uns, was du brauchst, um OpenInvoiceXML in deine Software zu integrieren — dein Feedback bestimmt, was wir als Nächstes bauen.",
+    apiDocs: {
+      before: "Die Schnittstellen zur Rechnungsprüfung, die diese Website nutzt, sind ",
+      linkText: "hier beschrieben",
+      after:
+        ". Sie sind keine stabile öffentliche API und können sich jederzeit ändern; eine gehostete API ist geplant.",
+    },
   },
   en: {
     metaTitle: "Help Shape OpenInvoiceXML — openinvoicexml",
@@ -24,5 +31,11 @@ export const developerPageDict: Record<
     heading: "Help Shape OpenInvoiceXML",
     intro:
       "Tell us what you need to integrate OpenInvoiceXML into your software — your feedback guides what we build next.",
+    apiDocs: {
+      before: "The invoice validation endpoints this website uses are ",
+      linkText: "described here",
+      after:
+        ". They are not a stable public API and can change at any time; a hosted API is planned.",
+    },
   },
 };
