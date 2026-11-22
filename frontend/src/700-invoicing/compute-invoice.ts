@@ -1,4 +1,9 @@
-import type { Invoice } from "openinvoicexml/browser";
+import {
+  calculateLineNetAmount,
+  calculateVatAmount,
+  sumAmounts,
+  type Invoice,
+} from "openinvoicexml/browser";
 
 // Spike scope: standard invoice (380), EUR, standard-rated VAT ("S")
 // only. Everything the engine needs beyond what a user types is fixed here.
@@ -94,18 +99,23 @@ export function emptyFormValues(today: string): InvoiceFormValues {
   };
 }
 
-// Same rounding as the engine's round2() (core/utils/monetary.ts), so the amounts computed here
-// pass its LINE_AMOUNT_ROUNDING / VAT breakdown checks.
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+// Amounts are calculated by the engine (calculateLineNetAmount, calculateVatAmount, sumAmounts): exact decimal
+// arithmetic, rounded half away from zero to 2 decimals only where EN 16931 rounds (line net amount, VAT per rate),
+// the same code its LINE_AMOUNT_ROUNDING / VAT / totals checks use. No float rounding here (it turned
+// 30 × 0.0055 = 0.165 into 0.16 instead of 0.17).
 
+// The text the user typed → number, without rounding: "0,0055" → 0.0055. For up to 15 significant digits the
+// engine reads back exactly the decimal that was typed (it uses String(n)). Only the first comma becomes a dot,
+// so "1.000,50" or "1,000.50" stay unparseable (NaN) instead of being misread.
+// Decimal notation only: optional sign, digits with one optional "." (after the comma swap), optional exponent.
+// Number() alone would also accept "0x10" (16), "0b11", "0o7" and "Infinity".
 // "" must not become 0 (Number("") === 0): an empty price would silently produce a 0.00 line.
-// NaN is blocked by the engine's amount checks instead.
+// NaN is blocked by the engine's amount checks instead (the engine helpers return NaN for it).
+const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 function toNumber(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed === "") return NaN;
-  const n = Number(trimmed.replace(",", "."));
+  const text = value.trim().replace(",", ".");
+  if (!DECIMAL.test(text)) return NaN;
+  const n = Number(text);
   return Number.isFinite(n) ? n : NaN;
 }
 
@@ -175,30 +185,32 @@ export function computeInvoice(values: InvoiceFormValues): { invoice: Invoice; t
       quantity,
       unitCode: line.unitCode,
       unitPrice,
-      lineAmount: round2(quantity * unitPrice),
+      lineAmount: calculateLineNetAmount(quantity, unitPrice),
       vatCategoryCode: "S" as const,
       vatRate: toNumber(line.vatRate),
     };
   });
 
-  // One breakdown per rate, in the order the rates first appear on the lines.
-  const taxableByRate = new Map<number, number>();
+  // One breakdown per rate, in the order the rates first appear on the lines. BT-116 is the exact sum of the
+  // line amounts of that rate; BT-117 is rounded once, per rate (not per line), as EN 16931 does.
+  const lineAmountsByRate = new Map<number, number[]>();
   for (const line of lines) {
-    taxableByRate.set(line.vatRate, (taxableByRate.get(line.vatRate) ?? 0) + line.lineAmount);
+    lineAmountsByRate.set(line.vatRate, [...(lineAmountsByRate.get(line.vatRate) ?? []), line.lineAmount]);
   }
-  const vatBreakdowns = [...taxableByRate].map(([rate, taxable]) => {
-    const taxableAmount = round2(taxable);
+  const vatBreakdowns = [...lineAmountsByRate].map(([rate, amounts]) => {
+    const taxableAmount = sumAmounts(amounts);
     return {
       categoryCode: "S" as const,
       rate,
       taxableAmount,
-      taxAmount: round2((taxableAmount * rate) / 100),
+      taxAmount: calculateVatAmount(taxableAmount, rate),
     };
   });
 
-  const taxExclusiveAmount = round2(lines.reduce((sum, line) => sum + line.lineAmount, 0));
-  const taxAmount = round2(vatBreakdowns.reduce((sum, bd) => sum + bd.taxAmount, 0));
-  const taxInclusiveAmount = round2(taxExclusiveAmount + taxAmount);
+  // Document totals are exact sums (BR-CO-13 to BR-CO-15); no further rounding.
+  const taxExclusiveAmount = sumAmounts(lines.map((line) => line.lineAmount));
+  const taxAmount = sumAmounts(vatBreakdowns.map((bd) => bd.taxAmount));
+  const taxInclusiveAmount = sumAmounts([taxExclusiveAmount, taxAmount]);
 
   const dueDate = optional(values.dueDate);
   const deliveryDate = optional(values.deliveryDate);

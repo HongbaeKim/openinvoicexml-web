@@ -69,9 +69,9 @@ WORKDIR /app
 # layer when application source changes but package.json/package-lock.json do not.
 COPY package*.json ./
 
-# openinvoicexml is installed as a local package such as:
+# openinvoicexml is installed as a local package:
 #
-#   file:vendor/openinvoicexml-0.4.3.tgz
+#   file:vendor/openinvoicexml-<version>.tgz   (the exact file is pinned in package.json / package-lock.json)
 #
 # npm therefore needs vendor/ to exist before `npm ci` runs.
 COPY vendor ./vendor
