@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "dependencies": {
     "openinvoicexml": "file:vendor/openinvoicexml-0.6.0.tgz"

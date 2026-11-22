@@ -1,7 +1,7 @@
 # Dev-only: runs Vite's dev server for local `docker compose up` convenience. The frontend's
 # actual production artifact is a static `npm run build` output served by nginx on the VPS (see
 # the `frontend-build` service in docker-compose.yml) — this file is never used for that.
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 COPY package*.json ./
 # The engine is a file:vendor/*.tgz dependency, so it must be in the image before npm ci.

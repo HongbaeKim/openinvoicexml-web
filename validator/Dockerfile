@@ -58,7 +58,7 @@ ARG VERAPDF_SHA256=6cc6341cb1af644044054b81f00a6590a7918abb18f762243de115258bcad
 # The final runtime image does not inherit this whole stage, so build-only
 # dependencies do not end up in production.
 
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 
 # All application build work happens under /app.
 WORKDIR /app
@@ -246,7 +246,7 @@ RUN set -eu; \
 #
 # Build tools, TypeScript source, curl, unzip and installer files stay behind.
 
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 # These are needed only as version metadata at runtime.
 #
