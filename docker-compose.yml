@@ -26,6 +26,11 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    # Memory protection: an overload kills and restarts the backend (oom_score_adj above postgres), never postgres or
+    # the host. Measured: ~40-65 MiB at rest, ~+50-70 MiB per 10 MB upload in flight; nginx admits at most 4 uploads.
+    mem_limit: ${BACKEND_MEM_LIMIT:-512m}
+    memswap_limit: ${BACKEND_MEM_LIMIT:-512m}
+    oom_score_adj: 500
     environment:
       # Default matches postgres's dev-only defaults above. On the VPS, set both this and
       # POSTGRES_PASSWORD in .env to the same real password — see the note on POSTGRES_PASSWORD.
@@ -91,6 +96,8 @@ services:
     # One validation runs one JVM at a time (-Xmx512m in the engine) plus a Node worker. Raise
     # together with MAX_CONCURRENT_VALIDATIONS; this VPS has 4 GB shared with other projects.
     mem_limit: ${VALIDATOR_MEM_LIMIT:-1g}
+    memswap_limit: ${VALIDATOR_MEM_LIMIT:-1g}
+    oom_score_adj: 500
     logging: *default-logging
 
   # Local dev convenience only — not how the frontend actually ships (that's a static `npm run
@@ -131,6 +138,11 @@ services:
     profiles: ["production"]
     image: nginx:1.27-alpine
     restart: unless-stopped
+    # Backstop only: request bodies are kept in memory (≤ 10 MiB per upload, at most 4 uploads + 20 checks in flight);
+    # measured ~8-38 MiB. oom_score_adj above postgres, as for backend and validator.
+    mem_limit: ${NGINX_MEM_LIMIT:-256m}
+    memswap_limit: ${NGINX_MEM_LIMIT:-256m}
+    oom_score_adj: 500
     ports:
       - "80:80"
       - "443:443"
