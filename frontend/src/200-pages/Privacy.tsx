@@ -82,6 +82,15 @@ export function Privacy(): JSX.Element {
         </section>
 
         <section>
+          <h2 className="mb-4 text-xl text-text">{t.cloudflareHeading}</h2>
+          {t.cloudflare.map((paragraph) => (
+            <p key={paragraph} className="mb-3">
+              {paragraph}
+            </p>
+          ))}
+        </section>
+
+        <section>
           <h2 className="mb-4 text-xl text-text">{t.howLongHeading}</h2>
           <p>{t.howLong}</p>
         </section>

@@ -43,12 +43,12 @@ validation routes; see "API documentation page" below.
 Each request starts Java validators on data from the internet, so it's the most expensive and
 most exposed route. What protects it:
 
-- **nginx** (`location = /api/validate`): own rate-limit zone `api_validate`, 6/min per IP with
-  burst 3 (CORS preflights don't count), `client_max_body_size 1m` with
+- **nginx** (`location = /api/validate`): own rate-limit zone `api_validate`, 4/min per IP with
+  burst 2 (CORS preflights don't count), `client_max_body_size 1m` with
   `client_body_buffer_size 1m` so bodies stay in memory and never land in an nginx temp file,
   `proxy_read_timeout 90s`.
 - **backend** (`backend/src/700-invoicing/`): only `Content-Type: application/xml` (415
-  otherwise), `MAX_XML_BYTES` (413), `@fastify/rate-limit` 6/min per IP (`request.ip` is the real
+  otherwise), `MAX_XML_BYTES` (413), `@fastify/rate-limit` 4/min per IP (`request.ip` is the real
   client IP via `trustProxy`), and cheap checks on a *copy* of the body: valid UTF-8, **no
   `DOCTYPE`** (so XXE / entity expansion never reaches the Java parsers), well-formed, root is a
   UBL `Invoice`. Anything else is a 400 before Java runs. The raw bytes are hashed first and never
@@ -73,10 +73,10 @@ Uploads are untrusted third-party files, and unlike `/api/validate` they're *not
 (a malformed or DOCTYPE-carrying file is a finding the report shows, not a 400). On top of the
 above:
 
-- nginx `location = /api/validate/upload`: own zone `api_upload` (3/min, burst 2),
+- nginx `location = /api/validate/upload`: own zone `api_upload` (2/min, burst 1),
   `client_max_body_size 10m` = `client_body_buffer_size`, `proxy_read_timeout 150s`.
 - backend: `Content-Type: application/octet-stream` only; per-format limits after sniffing the
-  first bytes (`MAX_UPLOAD_XML_BYTES` 5 MB, `MAX_UPLOAD_PDF_BYTES` 10 MB); 3/min per IP. The file
+  first bytes (`MAX_UPLOAD_XML_BYTES` 5 MB, `MAX_UPLOAD_PDF_BYTES` 10 MB); 2/min per IP. The file
   name is never sent by the page, and the client's MIME type is never used to decide the format.
 - validator: the engine detects the format from content only. Uploads share the queue but may
   use at most `MAX_CONCURRENT_UPLOADS` slots, with their own deadline
@@ -105,7 +105,7 @@ A Swagger UI page that describes the two validation routes (`POST /api/validate`
 the spec states at the top that these endpoints support the website and are not a stable public API.
 
 Adding it changed nothing about the other routes. `/api/validate` and `/api/validate/upload` keep their
-access gate (`private-gate.conf`), their nginx zones (`api_validate` 6/min, `api_upload` 3/min), their size
+access gate (`private-gate.conf`), their nginx zones (`api_validate` 4/min, `api_upload` 2/min), their size
 limits and the backend's own per-IP limits; the signup routes keep `api_signup`. What applies to the page
 itself:
 

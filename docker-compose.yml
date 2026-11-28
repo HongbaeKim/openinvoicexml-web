@@ -32,6 +32,9 @@ services:
     memswap_limit: ${BACKEND_MEM_LIMIT:-512m}
     oom_score_adj: 500
     environment:
+      # Per-IP limits for the two check routes (same values as nginx's api_validate / api_upload zones).
+      VALIDATE_RATE_LIMIT_PER_MINUTE: ${VALIDATE_RATE_LIMIT_PER_MINUTE:-4}
+      UPLOAD_RATE_LIMIT_PER_MINUTE: ${UPLOAD_RATE_LIMIT_PER_MINUTE:-2}
       # Default matches postgres's dev-only defaults above. On the VPS, set both this and
       # POSTGRES_PASSWORD in .env to the same real password — see the note on POSTGRES_PASSWORD.
       DATABASE_URL: ${DATABASE_URL:-postgres://app:app@postgres:5432/app}
@@ -42,7 +45,7 @@ services:
       VALIDATION_TIMEOUT_MS: ${VALIDATION_TIMEOUT_MS:-60000}
       MAX_XML_BYTES: ${MAX_XML_BYTES:-1048576}
       # POST /api/validate/upload (existing XML/PDF files); nginx allows 10 MB for that route.
-      UPLOAD_VALIDATION_TIMEOUT_MS: ${UPLOAD_VALIDATION_TIMEOUT_MS:-120000}
+      UPLOAD_VALIDATION_TIMEOUT_MS: ${UPLOAD_VALIDATION_TIMEOUT_MS:-90000}
       MAX_UPLOAD_XML_BYTES: ${MAX_UPLOAD_XML_BYTES:-5242880}
       MAX_UPLOAD_PDF_BYTES: ${MAX_UPLOAD_PDF_BYTES:-10485760}
     # Bound to loopback by default: reachable for local dev (http://localhost:$HOST_PORT) and,
@@ -79,7 +82,7 @@ services:
       VALIDATION_TIMEOUT_MS: ${VALIDATION_TIMEOUT_MS:-60000}
       MAX_CONCURRENT_VALIDATIONS: ${MAX_CONCURRENT_VALIDATIONS:-1}
       MAX_QUEUED_VALIDATIONS: ${MAX_QUEUED_VALIDATIONS:-4}
-      UPLOAD_VALIDATION_TIMEOUT_MS: ${UPLOAD_VALIDATION_TIMEOUT_MS:-120000}
+      UPLOAD_VALIDATION_TIMEOUT_MS: ${UPLOAD_VALIDATION_TIMEOUT_MS:-90000}
       # Uploads may use at most this many of the slots above, so Create checks still get one.
       MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-1}
       MAX_BODY_BYTES: ${MAX_UPLOAD_PDF_BYTES:-10485760}
