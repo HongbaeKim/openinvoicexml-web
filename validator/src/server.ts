@@ -1,19 +1,22 @@
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { pathToFileURL } from "node:url";
 import type { ExternalValidationResult, FileValidationResult } from "openinvoicexml/adapters";
 
-import { config } from "./config.js";
+import { config as defaultConfig } from "./config.js";
 import {
   fileResponse,
   UNAVAILABLE,
   xmlResponse,
   type FailureReason,
 } from "./results.js";
-import { runJob, sweepJobRoot, type JobOutcome } from "./run-job.js";
+import { runJob as defaultRunJob, sweepJobRoot, type JobOutcome, type RunJobOptions } from "./run-job.js";
 import {
   QueueFullError,
   QueueWaitAbortedError,
   ValidationQueue,
+  type BusySnapshot,
   type JobKind,
 } from "./validation-queue.js";
 
@@ -52,6 +55,15 @@ import {
 //     Lightweight health endpoint used to confirm that the validator service
 //     is running and to inspect current queue statistics.
 //
+// Busy answer (15(5) step 1): a request the queue can't admit gets, at once,
+//
+//   503 {"error":"busy","running":1,"waiting":3,"retryAfterSec":60}
+//   Retry-After: 60
+//
+// with one retry value written to both. The counts are a snapshot and the
+// time an estimate; nothing is reserved. A rejected request's body is read and
+// thrown away chunk by chunk (never collected, never written to /jobs).
+//
 // Logging policy:
 //
 // One structured JSON log line is written per job with only operational data:
@@ -60,6 +72,7 @@ import {
 //   - duration
 //   - outcome
 //   - classified failure reasons
+//   - for busy answers: running / waiting counts and the retry time
 //
 // We deliberately do NOT log:
 //   - invoice/request body
@@ -72,36 +85,13 @@ import {
 // potentially sensitive invoice contents.
 
 
-// ---------------------------------------------------------------------------
-// Validation queue
-// ---------------------------------------------------------------------------
-//
-// External validation is expensive because jobs can start Java processes and
-// PDF validation can use substantial memory.
-//
-// ValidationQueue limits how many jobs may run at once and how many may wait.
-//
-// config.maxConcurrent:
-//   total number of active validation jobs allowed
-//
-// config.maxQueued:
-//   number of additional jobs allowed to wait
-//
-// file:
-//   separate cap for uploaded-file jobs so expensive PDF/file validation does
-//   not consume all available capacity and starve normal Create checks.
-const queue = new ValidationQueue(config.maxConcurrent, config.maxQueued, {
-  file: config.maxConcurrentUploads,
-});
-
-
 // Used only to distinguish "body exceeded our configured limit" from other
 // request-stream errors such as a broken connection.
 class BodyTooLargeError extends Error {}
 
 
 // ---------------------------------------------------------------------------
-// Request body reader
+// Request body reader (admitted requests)
 // ---------------------------------------------------------------------------
 //
 // Read the incoming HTTP request into memory as a Buffer.
@@ -141,6 +131,57 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
 
 
 // ---------------------------------------------------------------------------
+// Request body drain (rejected requests)
+// ---------------------------------------------------------------------------
+//
+// Reads the body to its end WITHOUT keeping it: each chunk is counted and
+// dropped at once, so a rejected upload never accumulates in memory and never
+// reaches a temp file. Reading to the end (instead of closing the socket)
+// lets the backend's fetch see a normal answer instead of a socket error.
+//
+//   "ok"         body fully read (and discarded)
+//   "too-large"  more than `limit` bytes → caller answers 413 and closes
+//   "deadline"   the request's deadline fired while draining → stop reading
+//   "error"      the stream failed (client gone)
+type DrainResult = "ok" | "too-large" | "deadline" | "error";
+
+function drainBody(req: IncomingMessage, limit: number, signal: AbortSignal): Promise<DrainResult> {
+  return new Promise((resolve) => {
+    let size = 0;
+    let settled = false;
+
+    const finish = (result: DrainResult): void => {
+      if (settled) return;
+      settled = true;
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
+      signal.removeEventListener("abort", onAbort);
+      resolve(result);
+    };
+
+    const onData = (chunk: Buffer): void => {
+      size += chunk.length; // the chunk itself is not kept
+      if (size > limit) finish("too-large");
+    };
+    const onEnd = (): void => finish("ok");
+    const onError = (): void => finish("error");
+    const onAbort = (): void => finish("deadline");
+
+    if (signal.aborted) {
+      finish("deadline");
+      return;
+    }
+
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+
+// ---------------------------------------------------------------------------
 // JSON response helper
 // ---------------------------------------------------------------------------
 //
@@ -166,18 +207,33 @@ function send(
   res.end(JSON.stringify(body));
 }
 
+/** The busy answer: exactly these four fields, one retry value for body and header. */
+function sendBusy(res: ServerResponse, busy: BusySnapshot): void {
+  send(
+    res,
+    503,
+    { error: "busy", running: busy.running, waiting: busy.waiting, retryAfterSec: busy.retryAfterSec },
+    { "retry-after": String(busy.retryAfterSec) },
+  );
+}
+
+/** Answer, then close the request side (used when the body was not read to its end). */
+function sendAndClose(res: ServerResponse, req: IncomingMessage, write: () => void): void {
+  res.once("finish", () => req.destroy());
+  res.setHeader("connection", "close");
+  write();
+  if (res.destroyed) req.destroy();
+}
+
 
 // ---------------------------------------------------------------------------
 // Structured logging helper
 // ---------------------------------------------------------------------------
 //
 // Logs are JSON rather than free-form strings so they are easier to search and
-// aggregate later.
-//
-// Every log line automatically gets an ISO timestamp.
-//
+// aggregate later. Every log line automatically gets an ISO timestamp.
 // Callers should pass only non-sensitive operational fields.
-function log(fields: Record<string, unknown>): void {
+function defaultLog(fields: Record<string, unknown>): void {
   console.log(
     JSON.stringify({
       time: new Date().toISOString(),
@@ -188,422 +244,410 @@ function log(fields: Record<string, unknown>): void {
 
 
 // ---------------------------------------------------------------------------
-// Main validation request handler
+// Dependencies (injectable so the request handling can be tested without Java)
 // ---------------------------------------------------------------------------
-//
-// Handles both validation kinds:
-//
-//   "xml"
-//     generated invoice XML
-//
-//   "file"
-//     uploaded XML/PDF file
-//
-// The overall deadline starts as soon as the request reaches this function.
-// Queue waiting therefore counts toward the timeout as well.
-async function validate(
-  kind: JobKind,
-  req: IncomingMessage,
-  res: ServerResponse,
-): Promise<void> {
-  // Short random identifier used only for operational logs.
-  //
-  // It lets us correlate log lines for one request without logging anything
-  // from the invoice itself.
-  const job = randomUUID().slice(0, 8);
 
-  // Used for both logging total duration and calculating remaining timeout.
-  const started = Date.now();
-
-  // XML checks and uploaded-file checks have different timeout budgets because
-  // uploaded PDFs can require more validator work.
-  const timeoutMs =
-    kind === "xml"
-      ? config.xmlTimeoutMs
-      : config.fileTimeoutMs;
-
-
-  // -------------------------------------------------------------------------
-  // Read request bytes
-  // -------------------------------------------------------------------------
-
-  let body: Buffer;
-
-  try {
-    body = await readBody(req, config.maxBodyBytes);
-  } catch (err) {
-    // 413 = request body exceeded our configured validator limit.
-    //
-    // Other request-stream failures are reported as a generic bad request.
-    // We intentionally do not expose internal exception text.
-    send(
-      res,
-      err instanceof BodyTooLargeError ? 413 : 400,
-      { error: "bad body" },
-    );
-
-    return;
-  }
-
-
-  // -------------------------------------------------------------------------
-  // Calculate SHA-256 of the exact bytes received
-  // -------------------------------------------------------------------------
-  //
-  // This gives the caller a fingerprint of the exact invoice bytes that were
-  // validated.
-  //
-  // The hash is useful for proving that the downloaded/generated file and the
-  // file checked by the validator are byte-for-byte the same.
-  const sha256 = createHash("sha256")
-    .update(body)
-    .digest("hex");
-
-
-  // -------------------------------------------------------------------------
-  // Overall request deadline
-  // -------------------------------------------------------------------------
-  //
-  // There is one timeout budget for the WHOLE validation request:
-  //
-  //   queue wait
-  //   +
-  //   actual validator execution
-  //
-  // This prevents a request from waiting indefinitely in the queue and then
-  // receiving a fresh full validation timeout afterward.
-  const deadline = new AbortController();
-
-  // Abort once the request has consumed its total timeout budget.
-  const deadlineTimer = setTimeout(
-    () => deadline.abort(),
-    timeoutMs,
-  );
-
-  // If the client disconnects while the request is still running or waiting,
-  // abort it so it does not keep consuming a queue slot unnecessarily.
-  res.on("close", () => {
-    if (!res.writableFinished) {
-      deadline.abort();
-    }
-  });
-
-
-  // -------------------------------------------------------------------------
-  // Enter the validation queue and run the isolated job
-  // -------------------------------------------------------------------------
-
-  let outcome: JobOutcome;
-
-  try {
-    outcome = await queue.run(
-      kind,
-      deadline.signal,
-
-      () =>
-        runJob({
-          kind,
-
-          // Convert the Node Buffer into a Uint8Array view without making an
-          // unnecessary copy of the invoice bytes.
-          bytes: new Uint8Array(
-            body.buffer,
-            body.byteOffset,
-            body.byteLength,
-          ),
-
-          // Queue waiting has already consumed some of the overall timeout.
-          //
-          // Pass only the remaining time to the actual worker process.
-          //
-          // Math.max(1, ...) avoids passing zero or a negative timeout if the
-          // deadline is reached at the exact handoff point.
-          timeoutMs: Math.max(
-            1,
-            timeoutMs - (Date.now() - started),
-          ),
-
-          // Temporary per-job directories are created underneath this path.
-          jobRoot: config.jobRoot,
-
-          // Memory cap passed to the isolated Node worker process.
-          heapMb: config.workerHeapMb,
-        }),
-    );
-  } catch (err) {
-    // This timer is no longer needed once queue.run has returned or failed.
-    clearTimeout(deadlineTimer);
-
-    if (
-      err instanceof QueueFullError ||
-      err instanceof QueueWaitAbortedError
-    ) {
-      // QueueFullError:
-      //   there was no capacity to accept another waiting request.
-      //
-      // QueueWaitAbortedError:
-      //   the request timed out/disconnected while waiting for a slot.
-      //
-      // Both are temporary-capacity conditions, so return 503 and tell the
-      // caller it may retry later.
-      log({
-        job,
-        kind,
-        ms: Date.now() - started,
-        outcome:
-          err instanceof QueueFullError
-            ? "queue-full"
-            : "queue-timeout",
-      });
-
-      send(
-        res,
-        503,
-        { error: "busy" },
-        { "retry-after": "30" },
-      );
-
-      return;
-    }
-
-    // Unexpected errors are handled by the route-level catch below.
-    throw err;
-  }
-
-  // The job has completed, timed out or crashed, so the overall deadline timer
-  // is no longer needed.
-  clearTimeout(deadlineTimer);
-
-
-  // -------------------------------------------------------------------------
-  // Convert low-level job outcome into public failure categories
-  // -------------------------------------------------------------------------
-  //
-  // We expose only classified failure reasons rather than raw worker/engine
-  // exceptions.
-  const failures: FailureReason[] = [];
-
-  if (outcome.status !== "done") {
-    failures.push(
-      outcome.status === "timeout"
-        ? "timeout"
-        : "crash",
-    );
-  }
-
-
-  // -------------------------------------------------------------------------
-  // XML validation response
-  // -------------------------------------------------------------------------
-
-  if (kind === "xml") {
-    const response =
-      outcome.status === "done"
-        ? xmlResponse(
-            sha256,
-            outcome.result as ExternalValidationResult,
-            config.versions,
-            failures,
-          )
-        : {
-            // Even if validation failed internally, return the hash so the
-            // caller still knows which exact bytes reached this service.
-            sha256,
-
-            // Validators did not produce usable results.
-            kosit: UNAVAILABLE,
-            mustang: UNAVAILABLE,
-
-            // Always include validator version metadata.
-            versions: config.versions,
-          };
-
-    log({
-      job,
-      kind,
-      ms: Date.now() - started,
-      outcome: outcome.status,
-      failures,
-    });
-
-    // A validator timeout/crash is represented inside the response body rather
-    // than as an HTTP 500 because the HTTP request itself was handled normally.
-    send(res, 200, response);
-
-    return;
-  }
-
-
-  // -------------------------------------------------------------------------
-  // Uploaded-file validation failed before producing a result
-  // -------------------------------------------------------------------------
-
-  if (outcome.status !== "done") {
-    log({
-      job,
-      kind,
-      ms: Date.now() - started,
-      outcome: outcome.status,
-      failures,
-    });
-
-    send(res, 200, {
-      sha256,
-      sizeBytes: body.length,
-
-      // The service handled the request, but validators did not return a usable
-      // file-validation result.
-      status: "UNAVAILABLE",
-
-      // No structured file findings exist if validation never completed.
-      fileFindings: [],
-
-      kosit: UNAVAILABLE,
-      mustang: UNAVAILABLE,
-      veraPdf: UNAVAILABLE,
-
-      versions: config.versions,
-    });
-
-    return;
-  }
-
-
-  // -------------------------------------------------------------------------
-  // Successful uploaded-file validation
-  // -------------------------------------------------------------------------
-
-  const result = outcome.result as FileValidationResult;
-
-  // Translate the engine-level FileValidationResult into the stable API shape
-  // returned by this internal service.
-  const response = fileResponse(
-    sha256,
-    body.length,
-    result,
-    config.versions,
-    failures,
-  );
-
-  log({
-    job,
-    kind,
-    ms: Date.now() - started,
-
-    // For successful file jobs, the engine result has its own overall status.
-    outcome: result.status,
-
-    // Logging only the detected format is safe and useful operationally.
-    format: result.detectedFormat,
-
-    failures,
-  });
-
-  send(res, 200, response);
+export interface ValidatorDeps {
+  queue: ValidationQueue;
+  runJob: (options: RunJobOptions) => Promise<JobOutcome>;
+  config: Pick<typeof defaultConfig, "maxBodyBytes" | "xmlTimeoutMs" | "fileTimeoutMs" | "jobRoot" | "workerHeapMb" | "versions">;
+  log: (fields: Record<string, unknown>) => void;
 }
 
 
 // ---------------------------------------------------------------------------
-// HTTP server and routing
+// Main validation request handler
 // ---------------------------------------------------------------------------
 //
-// This intentionally uses Node's small built-in HTTP server instead of a larger
-// web framework because the service has only three internal routes.
-const server = createServer((req, res) => {
-  // Combine method + URL into one simple routing key.
+// Handles both validation kinds ("xml": generated invoice XML, "file":
+// uploaded XML/PDF).
+//
+// The overall deadline starts as soon as the request reaches this function.
+// Queue waiting counts toward it as well.
+async function validate(
+  deps: ValidatorDeps,
+  kind: JobKind,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const { queue, config, log } = deps;
+
+  // Short random identifier used only for operational logs.
+  const job = randomUUID().slice(0, 8);
+  const started = Date.now();
+
+  // XML checks and uploaded-file checks have different timeout budgets because
+  // uploaded PDFs can require more validator work.
+  const timeoutMs = kind === "xml" ? config.xmlTimeoutMs : config.fileTimeoutMs;
+  const remaining = (): number => Math.max(0, timeoutMs - (Date.now() - started));
+
+
+  // -------------------------------------------------------------------------
+  // One deadline for the whole request (drain/read + queue wait + job), and
+  // client-disconnect detection.
+  // -------------------------------------------------------------------------
   //
-  // Example:
-  //   "GET /health"
-  //   "POST /xml"
-  const route = `${req.method} ${req.url}`;
+  // The signal ends a queue wait AND cancels a running job (runJob kills the
+  // worker's process group and removes its job directory).
+  const deadline = new AbortController();
+  let clientClosed = false;
 
+  const deadlineTimer = setTimeout(() => deadline.abort(), timeoutMs);
 
-  // -------------------------------------------------------------------------
-  // Health endpoint
-  // -------------------------------------------------------------------------
+  res.on("close", () => {
+    if (!res.writableFinished) {
+      clientClosed = true;
+      deadline.abort();
+    }
+  });
 
-  if (route === "GET /health") {
-    send(res, 200, {
-      status: "ok",
-
-      // Queue statistics are useful for checking whether the service is busy
-      // without exposing invoice contents.
-      ...queue.stats,
+  const answerBusy = (busy: BusySnapshot, outcome: string): void => {
+    log({
+      job,
+      kind,
+      ms: Date.now() - started,
+      outcome,
+      running: busy.running,
+      waiting: busy.waiting,
+      retryAfterSec: busy.retryAfterSec,
     });
+    sendBusy(res, busy);
+  };
 
-    return;
-  }
+  const logClientClosed = (phase: string): void => {
+    log({ job, kind, ms: Date.now() - started, outcome: "client-closed", phase });
+  };
+
+  try {
+    // -----------------------------------------------------------------------
+    // 1. Admission BEFORE the body is read: a request that can't be admitted
+    //    never has its bytes stored anywhere.
+    // -----------------------------------------------------------------------
+    const early = queue.admission(kind, remaining());
+
+    if (early !== null) {
+      const drained = await drainBody(req, config.maxBodyBytes, deadline.signal);
+
+      if (drained === "too-large") {
+        sendAndClose(res, req, () => send(res, 413, { error: "bad body" }));
+        return;
+      }
+
+      if (clientClosed || drained === "error") {
+        logClientClosed("rejected");
+        return;
+      }
+
+      if (drained === "deadline") {
+        // The upload itself outlasted the deadline: still a busy answer, with
+        // a fresh snapshot; then stop reading.
+        sendAndClose(res, req, () => answerBusy(queue.busySnapshot(kind), "queue-timeout"));
+        return;
+      }
+
+      answerBusy(early.busy, early.reason === "queue-full" ? "queue-full" : "deadline-busy");
+      return;
+    }
 
 
-  // -------------------------------------------------------------------------
-  // Validation endpoints
-  // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // 2. Read the request bytes (admitted request)
+    // -----------------------------------------------------------------------
+    let body: Buffer;
 
-  if (
-    route === "POST /xml" ||
-    route === "POST /file"
-  ) {
-    validate(
-      route === "POST /xml" ? "xml" : "file",
-      req,
-      res,
-    ).catch(() => {
-      // Unexpected errors are deliberately not returned to the caller because
-      // exception messages may contain internal implementation details.
+    try {
+      body = await readBody(req, config.maxBodyBytes);
+    } catch (err) {
+      // 413 = request body exceeded our configured validator limit.
       //
-      // The log is also intentionally generic for the same reason.
+      // Other request-stream failures are reported as a generic bad request.
+      // We intentionally do not expose internal exception text.
+      send(res, err instanceof BodyTooLargeError ? 413 : 400, { error: "bad body" });
+      return;
+    }
+
+    // Fingerprint of the exact bytes received, so the caller can prove the
+    // validated bytes are the ones it sent.
+    const sha256 = createHash("sha256").update(body).digest("hex");
+
+
+    // -----------------------------------------------------------------------
+    // 3. Queue (authoritative admission) and the isolated job
+    // -----------------------------------------------------------------------
+    let outcome: JobOutcome;
+
+    try {
+      outcome = await queue.run(
+        kind,
+        deadline.signal,
+        async () => {
+          const runStarted = Date.now();
+          const result = await deps.runJob({
+            kind,
+            // A Uint8Array view of the Buffer, without copying the bytes.
+            bytes: new Uint8Array(body.buffer, body.byteOffset, body.byteLength),
+            // Only the remaining part of the request-wide deadline.
+            timeoutMs: Math.max(1, remaining()),
+            jobRoot: config.jobRoot,
+            heapMb: config.workerHeapMb,
+            signal: deadline.signal,
+          });
+
+          // Only jobs that produced a usable result feed the estimate.
+          if (result.status === "done") {
+            queue.recordDuration(kind, Date.now() - runStarted);
+          }
+
+          return result;
+        },
+        remaining(),
+      );
+    } catch (err) {
+      if (err instanceof QueueFullError) {
+        // The line changed while the body was being read.
+        answerBusy(err.busy, err.reason === "queue-full" ? "queue-full" : "deadline-busy");
+        return;
+      }
+
+      if (err instanceof QueueWaitAbortedError) {
+        if (clientClosed) {
+          logClientClosed("waiting");
+          return;
+        }
+
+        // Deadline hit while waiting (rare after deadline-aware admission).
+        answerBusy(queue.busySnapshot(kind), "queue-timeout");
+        return;
+      }
+
+      // Unexpected errors are handled by the route-level catch below.
+      throw err;
+    }
+
+    if (outcome.status === "aborted") {
+      if (clientClosed) {
+        // Worker process group killed and job directory removed by runJob;
+        // nobody is waiting for an answer.
+        logClientClosed("running");
+        return;
+      }
+
+      // Cancelled by the request deadline: same answer as a job timeout.
+      outcome = { status: "timeout" };
+    }
+
+
+    // -----------------------------------------------------------------------
+    // Convert low-level job outcome into public failure categories
+    // -----------------------------------------------------------------------
+    //
+    // We expose only classified failure reasons rather than raw worker/engine
+    // exceptions.
+    const failures: FailureReason[] = [];
+
+    if (outcome.status !== "done") {
+      failures.push(outcome.status === "timeout" ? "timeout" : "crash");
+    }
+
+
+    // -----------------------------------------------------------------------
+    // XML validation response
+    // -----------------------------------------------------------------------
+
+    if (kind === "xml") {
+      const response =
+        outcome.status === "done"
+          ? xmlResponse(
+              sha256,
+              outcome.result as ExternalValidationResult,
+              config.versions,
+              failures,
+            )
+          : {
+              // Even if validation failed internally, return the hash so the
+              // caller still knows which exact bytes reached this service.
+              sha256,
+
+              // Validators did not produce usable results.
+              kosit: UNAVAILABLE,
+              mustang: UNAVAILABLE,
+
+              // Always include validator version metadata.
+              versions: config.versions,
+            };
+
       log({
-        outcome: "internal-error",
+        job,
+        kind,
+        ms: Date.now() - started,
+        outcome: outcome.status,
+        failures,
       });
 
-      send(
-        res,
-        500,
-        { error: "internal error" },
-      );
-    });
+      // A validator timeout/crash is represented inside the response body
+      // rather than as an HTTP 500 because the HTTP request itself was handled
+      // normally.
+      send(res, 200, response);
 
-    return;
-  }
+      return;
+    }
 
 
-  // Any other method/path combination is unsupported.
-  send(
-    res,
-    404,
-    { error: "not found" },
-  );
-});
+    // -----------------------------------------------------------------------
+    // Uploaded-file validation failed before producing a result
+    // -----------------------------------------------------------------------
+
+    if (outcome.status !== "done") {
+      log({
+        job,
+        kind,
+        ms: Date.now() - started,
+        outcome: outcome.status,
+        failures,
+      });
+
+      send(res, 200, {
+        sha256,
+        sizeBytes: body.length,
+
+        // The service handled the request, but validators did not return a
+        // usable file-validation result.
+        status: "UNAVAILABLE",
+
+        // No structured file findings exist if validation never completed.
+        fileFindings: [],
+
+        kosit: UNAVAILABLE,
+        mustang: UNAVAILABLE,
+        veraPdf: UNAVAILABLE,
+
+        versions: config.versions,
+      });
+
+      return;
+    }
 
 
-// ---------------------------------------------------------------------------
-// Startup
-// ---------------------------------------------------------------------------
-//
-// Clean the temporary job root before accepting requests.
-//
-// This removes any leftover job directories that could remain after an
-// unclean shutdown during local/non-tmpfs operation.
-//
-// In the normal Docker deployment /jobs is tmpfs and is already ephemeral,
-// but sweeping it here keeps startup behavior safe and predictable everywhere.
-await sweepJobRoot(config.jobRoot);
+    // -----------------------------------------------------------------------
+    // Successful uploaded-file validation
+    // -----------------------------------------------------------------------
 
+    const result = outcome.result as FileValidationResult;
 
-// Listen on all interfaces INSIDE the container.
-//
-// This does not make the service publicly reachable by itself.
-// docker-compose does not publish port 4000 to the host, so only containers on
-// the Docker `validation` network can connect to it.
-server.listen(
-  config.port,
-  "0.0.0.0",
-  () => {
-    // Log startup plus the exact validator versions embedded in this image.
+    // Translate the engine-level FileValidationResult into the stable API
+    // shape returned by this internal service.
+    const response = fileResponse(
+      sha256,
+      body.length,
+      result,
+      config.versions,
+      failures,
+    );
+
     log({
-      msg: "validator listening",
-      port: config.port,
-      ...config.versions,
+      job,
+      kind,
+      ms: Date.now() - started,
+
+      // For successful file jobs, the engine result has its own overall status.
+      outcome: result.status,
+
+      // Logging only the detected format is safe and useful operationally.
+      format: result.detectedFormat,
+
+      failures,
     });
-  },
-);
+
+    send(res, 200, response);
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// HTTP routing
+// ---------------------------------------------------------------------------
+//
+// Node's small built-in HTTP server: the service has only three internal
+// routes and does not need a framework.
+
+export function createValidatorHandler(
+  deps: ValidatorDeps,
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    const route = `${req.method} ${req.url}`;
+
+    if (route === "GET /health") {
+      send(res, 200, {
+        status: "ok",
+
+        // Queue statistics are useful for checking whether the service is busy
+        // without exposing invoice contents.
+        ...deps.queue.stats,
+      });
+
+      return;
+    }
+
+    if (route === "POST /xml" || route === "POST /file") {
+      validate(deps, route === "POST /xml" ? "xml" : "file", req, res).catch(() => {
+        // Unexpected errors are deliberately not returned to the caller
+        // because exception messages may contain internal implementation
+        // details. The log is also intentionally generic for the same reason.
+        deps.log({
+          outcome: "internal-error",
+        });
+
+        send(res, 500, { error: "internal error" });
+      });
+
+      return;
+    }
+
+    // Any other method/path combination is unsupported.
+    send(res, 404, { error: "not found" });
+  };
+}
+
+
+// ---------------------------------------------------------------------------
+// Startup (only when this file is the entry point: `node dist/server.js`)
+// ---------------------------------------------------------------------------
+//
+// Importing this module (unit tests) creates nothing and listens on nothing.
+
+function isEntryPoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return pathToFileURL(realpathSync(entry)).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
+  // External validation is expensive because jobs can start Java processes and
+  // PDF validation can use substantial memory. The queue limits how many jobs
+  // may run at once and how many may wait (config unchanged); `file` caps
+  // uploaded-file jobs separately so they can't starve normal Create checks.
+  const queue = new ValidationQueue(defaultConfig.maxConcurrent, defaultConfig.maxQueued, {
+    file: defaultConfig.maxConcurrentUploads,
+  });
+
+  const server = createServer(
+    createValidatorHandler({ queue, runJob: defaultRunJob, config: defaultConfig, log: defaultLog }),
+  );
+
+  // Remove job directories a previous, killed process may have left behind.
+  await sweepJobRoot(defaultConfig.jobRoot);
+
+  server.listen(defaultConfig.port, "0.0.0.0", () => {
+    defaultLog({
+      msg: "validator listening",
+      port: defaultConfig.port,
+      ...defaultConfig.versions,
+    });
+  });
+}

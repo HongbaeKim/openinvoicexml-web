@@ -14,6 +14,11 @@ export const validationResultDict: Record<
     downloadAnyway: string;
     downloadWithout: string;
     tryAgain: string;
+    busyHeading: string;
+    busySnapshot: string;
+    createdInBrowser: string;
+    tryAgainAvailableIn: (seconds: number) => string;
+    slowNote: string;
   }
 > = {
   de: {
@@ -41,6 +46,12 @@ export const validationResultDict: Record<
     downloadAnyway: "XML trotzdem herunterladen",
     downloadWithout: "XML ohne externe Prüfung herunterladen",
     tryAgain: "Erneut versuchen",
+    busyHeading: "⏳ Gerade viele Prüfungen",
+    busySnapshot: "Die Zahlen sind eine Momentaufnahme, die Zeit ist eine Schätzung.",
+    createdInBrowser: "Deine Rechnung wurde trotzdem in deinem Browser erstellt.",
+    tryAgainAvailableIn: (seconds) => `Erneut versuchen, verfügbar in etwa ${seconds} Sekunden`,
+    slowNote:
+      "Die Prüfung läuft noch. Wenn mehrere Prüfungen gleichzeitig laufen, kann das bis zu einer Minute dauern.",
   },
   en: {
     validating: "Checking with KoSIT and Mustang … (usually 15–30 seconds)",
@@ -67,5 +78,10 @@ export const validationResultDict: Record<
     downloadAnyway: "Download XML anyway",
     downloadWithout: "Download XML without external validation",
     tryAgain: "Try again",
+    busyHeading: "⏳ Many checks right now",
+    busySnapshot: "These numbers are a snapshot and the time is an estimate.",
+    createdInBrowser: "Your invoice was still created in your browser.",
+    tryAgainAvailableIn: (seconds) => `Try again, available in about ${seconds} seconds`,
+    slowNote: "Still checking. When several checks run at the same time, this can take up to a minute.",
   },
 };

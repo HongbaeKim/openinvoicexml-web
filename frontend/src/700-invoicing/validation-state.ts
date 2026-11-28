@@ -1,4 +1,5 @@
 import type { BytesPostResult } from "../000-core/api";
+import { parseBusy } from "./shared/busy";
 import {
   didNotRun,
   failed,
@@ -13,6 +14,7 @@ import {
 //   INCOMPLETE   the server validated different bytes (hash mismatch): retry, never a pass or fail
 //   FAIL         a validator ran and rejected the invoice, or the server rejected the request
 //   UNAVAILABLE  a validator couldn't run, or the server/network didn't answer usefully
+//   BUSY         the server said "busy" (503 with error: "busy"): counts + retry time, never a pass or fail
 //
 // Only PASS may ever look like success.
 
@@ -20,7 +22,8 @@ export type ValidationState =
   | { kind: "PASS"; response: XmlValidationResponse }
   | { kind: "FAIL"; response?: XmlValidationResponse }
   | { kind: "INCOMPLETE"; response: XmlValidationResponse }
-  | { kind: "UNAVAILABLE"; response?: XmlValidationResponse; rateLimited?: boolean };
+  | { kind: "UNAVAILABLE"; response?: XmlValidationResponse; rateLimited?: boolean }
+  | { kind: "BUSY"; running: number | null; waiting: number | null; retryAfterSec: number };
 
 function isResponse(body: unknown): body is XmlValidationResponse {
   if (typeof body !== "object" || body === null) return false;
@@ -35,6 +38,9 @@ export function deriveValidationState(result: BytesPostResult, localSha256: stri
   // 400/413/415: the server refused this XML. Never happens for XML this page generated, but if
   // it does it's a problem with the file, not an outage.
   if (status === 400 || status === 413 || status === 415) return { kind: "FAIL" };
+  // Only a 503 whose body says "busy"; any other 503 falls through to UNAVAILABLE below.
+  const busy = parseBusy(status, body);
+  if (busy) return { kind: "BUSY", ...busy };
   if (status !== 200 || !isResponse(body)) return { kind: "UNAVAILABLE" };
 
   // Results for different bytes say nothing about this invoice, pass or fail.

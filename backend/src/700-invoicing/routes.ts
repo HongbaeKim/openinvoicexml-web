@@ -180,6 +180,33 @@ function sha256(bytes: Buffer): string {
 }
 
 /**
+ * An AbortSignal that fires when the browser's connection closes before our
+ * response has been sent (tab closed, navigation, network loss).
+ *
+ * `reply.raw` "close" is used, not `request.raw` "close": the latter also
+ * fires after a normally finished body read. A close after the response was
+ * finished (keep-alive teardown) is ignored.
+ */
+function clientClosedSignal(reply: FastifyReply): AbortSignal {
+  const controller = new AbortController();
+
+  reply.raw.once("close", () => {
+    if (!reply.raw.writableFinished) {
+      controller.abort();
+    }
+  });
+
+  // The connection may already be gone (closed while the body was being read
+  // or checked, before this listener existed).
+  const socket = reply.request.raw.socket;
+  if (!reply.raw.writableFinished && (reply.raw.destroyed || !socket || socket.destroyed)) {
+    controller.abort();
+  }
+
+  return controller.signal;
+}
+
+/**
  * Converts the internal validator result into the public API response.
  *
  * This also performs an important integrity check:
@@ -195,18 +222,45 @@ export function sendRelayResult(
   // The validator service is alive and reachable, but currently has no
   // available validation capacity.
   //
-  // Return HTTP 503 and preserve Retry-After so the frontend can wait and
-  // retry instead of immediately treating this as a permanent failure.
+  // Return HTTP 503 with the (already validated and clamped) queue snapshot
+  // and retry time, so the frontend can show them and offer a retry instead of
+  // treating this as a failure. One retry value for the body and the
+  // Retry-After header. Nothing else from the validator body is passed on.
   if (relay.kind === "busy") {
     reply.log.info(
-      { outcome: "validator-busy" },
+      {
+        outcome: "validator-busy",
+        running: relay.running,
+        waiting: relay.waiting,
+        retryAfterSec: relay.retryAfterSec,
+      },
       "validation",
     );
 
     return reply
       .code(503)
-      .header("retry-after", relay.retryAfter)
-      .send({ error: "busy" });
+      .header("retry-after", String(relay.retryAfterSec))
+      .send({
+        error: "busy",
+        running: relay.running,
+        waiting: relay.waiting,
+        retryAfterSec: relay.retryAfterSec,
+      });
+  }
+
+  // The browser went away while the validator was working (or the request was
+  // waiting). The relay has already been aborted, which lets the validator
+  // drop or cancel the job. Nobody reads this answer; it only completes the
+  // request on our side.
+  if (relay.kind === "client-closed") {
+    reply.log.info(
+      { outcome: "client-closed" },
+      "validation",
+    );
+
+    return reply
+      .code(503)
+      .send({ error: "validation unavailable" });
   }
 
   // The validator could not produce a usable validation response.
@@ -412,6 +466,7 @@ export const invoicingRoutes: FastifyPluginAsync = async (
           "/xml",
           body,
           RELAY_TIMEOUT_MS,
+          clientClosedSignal(reply),
         ),
         hash,
       );
@@ -514,6 +569,7 @@ export const invoicingRoutes: FastifyPluginAsync = async (
           "/file",
           body,
           UPLOAD_RELAY_TIMEOUT_MS,
+          clientClosedSignal(reply),
         ),
         hash,
       );

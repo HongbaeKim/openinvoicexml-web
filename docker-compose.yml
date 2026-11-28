@@ -67,6 +67,9 @@ services:
   validator:
     build: ./validator
     restart: unless-stopped
+    # Docker's init (tini) as PID 1: reaps the Java processes of killed jobs (timeout / client
+    # disconnect), which would otherwise stay zombies under node, and forwards SIGTERM on stop.
+    init: true
     environment:
       VALIDATION_TIMEOUT_MS: ${VALIDATION_TIMEOUT_MS:-60000}
       MAX_CONCURRENT_VALIDATIONS: ${MAX_CONCURRENT_VALIDATIONS:-1}

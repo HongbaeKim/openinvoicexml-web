@@ -2,7 +2,9 @@ import { useRef, useState, type DragEvent, type JSX } from "react";
 import { Header } from "../../100-layout/Header";
 import { Footer } from "../../100-layout/Footer";
 import { postBytes } from "../../000-core/api";
-import { usePageMeta, useTranslation } from "../../000-core/i18n";
+import { usePageMeta, useTranslation, type Lang } from "../../000-core/i18n";
+import { busySentence, countsKnown, formatCountdown } from "../shared/busy";
+import { useCountdown, useShowAfter } from "../shared/use-countdown";
 import { sha256Hex } from "../shared/sha256";
 import { sizeLimit, sniff, type Sniffed } from "./sniff-file";
 import { deriveUploadState, type UploadState } from "./upload-state";
@@ -19,6 +21,9 @@ const PRIMARY = "rounded-md bg-accent px-[1.4rem] py-[0.7rem] font-semibold text
 const SECONDARY = "rounded-md border border-border px-[1.4rem] py-[0.7rem] text-text hover:border-accent";
 // Above nginx's proxy_read_timeout for /api/validate/upload.
 const UPLOAD_TIMEOUT_MS = 160_000;
+// After this long without an answer, a neutral note says that it can take longer (never "in line").
+const SLOW_NOTE_MS = 20_000;
+const PRIMARY_COUNTDOWN = `${PRIMARY} disabled:cursor-not-allowed`;
 
 interface Picked {
   name: string;
@@ -33,9 +38,11 @@ type Phase =
   | { kind: "done"; file: Picked; state: UploadState };
 
 export function ValidatePage(): JSX.Element {
-  const { t } = useTranslation(validatePageDict);
+  const { t, lang } = useTranslation(validatePageDict);
   usePageMeta({ title: t.metaTitle, description: t.metaDescription });
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  // Keyed by the phase object, so every new upload starts its own 20 s.
+  const slow = useShowAfter(phase.kind === "validating", SLOW_NOTE_MS, phase.kind === "validating" ? phase : null);
   const [dragging, setDragging] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const run = useRef(0);
@@ -143,7 +150,7 @@ export function ValidatePage(): JSX.Element {
               {t.detected}: {detectedLabel(phase.file.sniffed)}
             </p>
             <p className="text-sm text-text">{t.privacy}</p>
-            {phase.kind === "validating" ? (
+            {phase.kind === "validating" && (
               <p role="status" className="mb-0 flex items-center gap-2 text-sm text-text">
                 <span
                   aria-hidden="true"
@@ -151,7 +158,13 @@ export function ValidatePage(): JSX.Element {
                 />
                 {t.validating}
               </p>
-            ) : (
+            )}
+            {phase.kind === "validating" && slow && (
+              <p role="status" className="mt-2 mb-0 text-sm text-text-muted">
+                {t.slowNote}
+              </p>
+            )}
+            {phase.kind === "picked" && (
               <div className="flex flex-wrap gap-3">
                 <button type="button" className={PRIMARY} onClick={() => void validate(phase.file)}>
                   {t.validate}
@@ -165,9 +178,17 @@ export function ValidatePage(): JSX.Element {
         )}
 
         {phase.kind === "done" && (
-          <section role="status" className={SECTION_CLASS}>
-            <Outcome state={phase.state} fileName={phase.file.name} t={t} />
+          // BUSY announces only its heading and text (aria-live inside Outcome), not the ticking countdown.
+          <section role={phase.state.kind === "BUSY" ? undefined : "status"} className={SECTION_CLASS}>
+            <Outcome state={phase.state} fileName={phase.file.name} t={t} lang={lang} />
             <div className="mt-4 flex flex-wrap gap-3">
+              {phase.state.kind === "BUSY" && (
+                <BusyRetryButton
+                  state={phase.state}
+                  t={t}
+                  onRetry={() => void validate(phase.file)}
+                />
+              )}
               {(phase.state.kind === "INCOMPLETE" || phase.state.kind === "UNAVAILABLE") && (
                 <button type="button" className={PRIMARY} onClick={() => void validate(phase.file)}>
                   {t.tryAgain}
@@ -189,12 +210,23 @@ function Outcome({
   state,
   fileName,
   t,
+  lang,
 }: {
   state: UploadState;
   fileName: string;
   t: (typeof validatePageDict)["de"];
+  lang: Lang;
 }): JSX.Element {
   if ("report" in state) return <ValidationReport report={state.report} fileName={fileName} />;
+  if (state.kind === "BUSY") {
+    return (
+      <div aria-live="polite">
+        <h2 className="mb-2 text-xl text-warning">{t.busyHeading}</h2>
+        <p className="mb-1 text-sm">{busySentence(lang, state)}</p>
+        {countsKnown(state) && <p className="mb-0 text-sm">{t.busySnapshot}</p>}
+      </div>
+    );
+  }
   const text =
     state.kind === "INCOMPLETE"
       ? t.incomplete
@@ -207,4 +239,30 @@ function Outcome({
             : t.unavailable;
   const color = state.kind === "TOO_LARGE" || state.kind === "REJECTED" ? "text-danger" : "text-warning";
   return <p className={`mb-0 ${color}`}>{text}</p>;
+}
+
+// "Try again" for a busy answer: disabled while the countdown runs, then only re-enabled (never sends by itself).
+function BusyRetryButton({
+  state,
+  t,
+  onRetry,
+}: {
+  state: Extract<UploadState, { kind: "BUSY" }>;
+  t: (typeof validatePageDict)["de"];
+  onRetry: () => void;
+}): JSX.Element {
+  const remaining = useCountdown(state.retryAfterSec, state);
+  const waitingForRetry = remaining > 0;
+  return (
+    <button
+      type="button"
+      className={PRIMARY_COUNTDOWN}
+      disabled={waitingForRetry}
+      aria-label={waitingForRetry ? t.tryAgainAvailableIn(state.retryAfterSec) : undefined}
+      onClick={onRetry}
+    >
+      {t.tryAgain}
+      {waitingForRetry && <span aria-hidden="true"> ({formatCountdown(remaining)})</span>}
+    </button>
+  );
 }

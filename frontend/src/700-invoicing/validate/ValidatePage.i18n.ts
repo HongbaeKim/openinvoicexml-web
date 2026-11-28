@@ -31,6 +31,10 @@ export const validatePageDict: Record<
     rateLimited: string;
     rejected: string;
     serverTooLarge: string;
+    busyHeading: string;
+    busySnapshot: string;
+    tryAgainAvailableIn: (seconds: number) => string;
+    slowNote: string;
   }
 > = {
   de: {
@@ -67,6 +71,11 @@ export const validatePageDict: Record<
     rateLimited: "⚠ Zu viele Prüfungen in kurzer Zeit. Bitte versuche es in einer Minute erneut.",
     rejected: "Der Server hat die Datei abgelehnt.",
     serverTooLarge: "Die Datei ist für die Prüfung zu groß.",
+    busyHeading: "⏳ Gerade viele Prüfungen",
+    busySnapshot: "Die Zahlen sind eine Momentaufnahme, die Zeit ist eine Schätzung.",
+    tryAgainAvailableIn: (seconds) => `Erneut versuchen, verfügbar in etwa ${seconds} Sekunden`,
+    slowNote:
+      "Die Prüfung läuft noch. Wenn mehrere Prüfungen gleichzeitig laufen, kann das bis zu zwei Minuten dauern.",
   },
   en: {
     metaTitle: "Validate an invoice — openinvoicexml",
@@ -101,5 +110,9 @@ export const validatePageDict: Record<
     rateLimited: "⚠ Too many checks in a short time. Please try again in a minute.",
     rejected: "The server rejected the file.",
     serverTooLarge: "The file is too large to be checked.",
+    busyHeading: "⏳ Many checks right now",
+    busySnapshot: "These numbers are a snapshot and the time is an estimate.",
+    tryAgainAvailableIn: (seconds) => `Try again, available in about ${seconds} seconds`,
+    slowNote: "Still checking. When several checks run at the same time, this can take up to two minutes.",
   },
 };

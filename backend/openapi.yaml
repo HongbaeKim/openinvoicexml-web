@@ -191,25 +191,65 @@ components:
       description: |
         No validation result right now. Two cases, told apart by `error`:
 
-        - `busy`: all validation slots are in use. `Retry-After` says when to try again.
+        - `busy`: the validation queue is full, or this check could not finish in time behind the
+          checks already queued. Nothing was validated and nothing is reserved. The body says how
+          many checks were running and waiting (a snapshot at that moment; both `null` when
+          unknown) and `retryAfterSec`, an estimate of when trying again is reasonable. Every
+          request sent after that is treated like a new one.
         - `validation unavailable`: the check could not be completed (for example, it took too
-          long). Try again later. No `Retry-After`.
+          long). Try again later. No `Retry-After`, no counts.
       headers:
         Retry-After:
-          description: Seconds to wait before retrying. Sent with `busy` only.
+          description: |
+            Seconds to wait before retrying. Sent with `busy` only; always the same value as
+            `retryAfterSec` in the body.
           schema:
             type: string
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/Error"
+            anyOf:
+              - $ref: "#/components/schemas/Busy"
+              - $ref: "#/components/schemas/Error"
           examples:
             busy:
-              value: { error: busy }
+              value: { error: busy, running: 1, waiting: 3, retryAfterSec: 60 }
+            busyCountsUnknown:
+              value: { error: busy, running: null, waiting: null, retryAfterSec: 30 }
             unavailable:
               value: { error: validation unavailable }
 
   schemas:
+    Busy:
+      description: |
+        The validation queue cannot take this check now. Counts are a snapshot, the retry time an
+        estimate; neither is a promise or a reservation.
+      type: object
+      required: [error, running, waiting, retryAfterSec]
+      properties:
+        error:
+          type: string
+          enum: [busy]
+        running:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Checks running when this request was refused; `null` when unknown.
+        waiting:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 100
+          description: Checks waiting when this request was refused; `null` when unknown.
+        retryAfterSec:
+          type: integer
+          minimum: 10
+          maximum: 180
+          multipleOf: 5
+          description: Suggested wait in seconds before trying again (same as `Retry-After`).
+      additionalProperties: false
+
     Error:
       type: object
       required: [error]

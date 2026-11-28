@@ -76,10 +76,16 @@ import type { JobKind } from "./validation-queue.js";
 // "crash"
 //   The worker failed to start, exited unexpectedly, or never returned a
 //   usable result.
+//
+// "aborted"
+//   The caller's AbortSignal fired (client disconnected, or the request-wide
+//   deadline passed) before a result arrived. The process group was killed and
+//   the job directory removed, exactly as on timeout (15(5) step 1, B.2.5).
 export type JobOutcome =
   | { status: "done"; result: unknown }
   | { status: "timeout" }
-  | { status: "crash" };
+  | { status: "crash" }
+  | { status: "aborted" };
 
 
 // ---------------------------------------------------------------------------
@@ -121,6 +127,14 @@ export interface RunJobOptions {
    * tested without running the real validator stack.
    */
   workerPath?: string;
+
+  /**
+   * Optional cancellation. When it fires before the worker has answered, the
+   * worker's whole process group is SIGKILLed (Node worker + Java children),
+   * the outcome is "aborted" and the job directory is removed. If it has
+   * already fired, no directory is created and nothing is started.
+   */
+  signal?: AbortSignal;
 }
 
 
@@ -177,6 +191,12 @@ function killGroup(pid: number | undefined): void {
 export async function runJob(
   options: RunJobOptions,
 ): Promise<JobOutcome> {
+  // Already cancelled (e.g. the client left while the job was being handed a
+  // slot): don't create a directory, don't write the bytes, don't start Java.
+  if (options.signal?.aborted) {
+    return { status: "aborted" };
+  }
+
   // Create a random job directory name.
   //
   // No user-supplied filename, invoice number, customer name, etc. becomes part
@@ -314,6 +334,32 @@ export async function runJob(
 
 
       // ---------------------------------------------------------------------
+      // Cancellation (client disconnect / request deadline)
+      // ---------------------------------------------------------------------
+      //
+      // Same path as a timeout: mark the outcome and SIGKILL the whole process
+      // group; the "exit" handler below resolves, the outer finally removes
+      // the job directory. Only while no result has arrived yet.
+      const onAbort = (): void => {
+        if (outcome.status === "crash") {
+          outcome = {
+            status: "aborted",
+          };
+        }
+
+        killGroup(child.pid);
+      };
+
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+
+      // The signal may have fired while the input file was being written
+      // (before the listener existed): handle that now.
+      if (options.signal?.aborted) {
+        onAbort();
+      }
+
+
+      // ---------------------------------------------------------------------
       // Successful IPC result
       // ---------------------------------------------------------------------
       //
@@ -343,6 +389,7 @@ export async function runJob(
       // resolve here as well.
       child.on("error", () => {
         clearTimeout(timer);
+        options.signal?.removeEventListener("abort", onAbort);
 
         resolve({
           status: "crash",
@@ -368,6 +415,7 @@ export async function runJob(
       // survive the worker.
       child.on("exit", () => {
         clearTimeout(timer);
+        options.signal?.removeEventListener("abort", onAbort);
 
         killGroup(child.pid);
 
