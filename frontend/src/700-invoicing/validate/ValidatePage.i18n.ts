@@ -75,7 +75,7 @@ export const validatePageDict: Record<
     busySnapshot: "Die Zahlen sind eine Momentaufnahme, die Zeit ist eine Schätzung.",
     tryAgainAvailableIn: (seconds) => `Erneut versuchen, verfügbar in etwa ${seconds} Sekunden`,
     slowNote:
-      "Die Prüfung läuft noch. Wenn mehrere Prüfungen gleichzeitig laufen, kann das bis zu zwei Minuten dauern.",
+      "Die Prüfung läuft noch. Wenn mehrere Prüfungen gleichzeitig laufen, kann das bis zu 90 Sekunden dauern.",
   },
   en: {
     metaTitle: "Validate an invoice — openinvoicexml",
@@ -113,6 +113,6 @@ export const validatePageDict: Record<
     busyHeading: "⏳ Many checks right now",
     busySnapshot: "These numbers are a snapshot and the time is an estimate.",
     tryAgainAvailableIn: (seconds) => `Try again, available in about ${seconds} seconds`,
-    slowNote: "Still checking. When several checks run at the same time, this can take up to two minutes.",
+    slowNote: "Still checking. When several checks run at the same time, this can take up to 90 seconds.",
   },
 };
